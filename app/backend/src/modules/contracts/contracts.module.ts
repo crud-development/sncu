@@ -1,0 +1,23 @@
+import { Module } from '@nestjs/common';
+import { MongooseModule } from '@nestjs/mongoose';
+import { ClientsModule } from '../clients/clients.module';
+import { WorkpointsModule } from '../workpoints/workpoints.module';
+import { SettingsModule } from '../settings/settings.module';
+import { Contract, ContractSchema } from './schemas/contract.schema';
+import { ContractsService } from './contracts.service';
+import { ContractsController } from './contracts.controller';
+
+@Module({
+  imports: [
+    MongooseModule.forFeature([
+      { name: Contract.name, schema: ContractSchema },
+    ]),
+    ClientsModule,
+    WorkpointsModule,
+    SettingsModule,
+  ],
+  controllers: [ContractsController],
+  providers: [ContractsService],
+  exports: [ContractsService],
+})
+export class ContractsModule {}

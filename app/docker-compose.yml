@@ -1,0 +1,30 @@
+services:
+  mongo:
+    image: mongo:7
+    container_name: sncu-mongo
+    restart: unless-stopped
+    ports:
+      - "${MONGO_PORT:-27018}:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:-sncu}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASS:-sncu}
+      MONGO_INITDB_DATABASE: ${MONGO_DB:-sncu}
+    volumes:
+      - sncu_mongo_data:/data/db
+
+  mongo-express:
+    image: mongo-express:1
+    container_name: sncu-mongo-express
+    restart: unless-stopped
+    ports:
+      - "${MONGO_EXPRESS_PORT:-8082}:8081"
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: ${MONGO_USER:-sncu}
+      ME_CONFIG_MONGODB_ADMINPASSWORD: ${MONGO_PASS:-sncu}
+      ME_CONFIG_MONGODB_URL: mongodb://${MONGO_USER:-sncu}:${MONGO_PASS:-sncu}@mongo:27017/
+      ME_CONFIG_BASICAUTH: "false"
+    depends_on:
+      - mongo
+
+volumes:
+  sncu_mongo_data:
