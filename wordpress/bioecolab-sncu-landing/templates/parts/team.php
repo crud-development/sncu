@@ -20,7 +20,7 @@ $team_img = bsl_img( 'team_image', bsl_default( 'team_image' ) );
 				<img src="<?php echo esc_url( $team_img ); ?>" alt="Echipa BioEcoLab" loading="lazy" />
 			</div>
 			<svg class="bsl-team__orbit" viewBox="0 0 200 200" aria-hidden="true">
-				<circle cx="100" cy="100" r="92" fill="none" stroke="rgba(134,239,172,.3)" stroke-width="1" stroke-dasharray="3 7" />
+				<circle cx="100" cy="100" r="92" fill="none" stroke="rgba(22,101,52,.25)" stroke-width="1" stroke-dasharray="3 7" />
 			</svg>
 			<div class="bsl-team__seal" data-bsl-parallax="50">
 				<?php echo bsl_icon( 'shield' ); ?>

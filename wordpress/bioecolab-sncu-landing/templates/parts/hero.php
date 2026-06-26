@@ -49,8 +49,8 @@ $stats     = bsl_list( 'stats_items', bsl_list_default( 'stats_items' ) );
 
 			<!-- Inel SVG animat -->
 			<svg class="bsl-hero__ring" viewBox="0 0 120 120" aria-hidden="true">
-				<circle cx="60" cy="60" r="54" fill="none" stroke="rgba(134,239,172,.25)" stroke-width="1" stroke-dasharray="4 6" />
-				<circle class="bsl-hero__ring-dot" cx="60" cy="6" r="4" fill="#4ade80" />
+				<circle cx="60" cy="60" r="54" fill="none" stroke="rgba(22,101,52,.28)" stroke-width="1" stroke-dasharray="4 6" />
+				<circle class="bsl-hero__ring-dot" cx="60" cy="6" r="4" fill="#16a34a" />
 			</svg>
 
 			<?php if ( ! empty( $stats[0] ) ) : ?>

@@ -40,7 +40,7 @@ $html = '<!DOCTYPE html><html lang="ro"><head><meta charset="utf-8">'
 	. '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'
 	. '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">'
 	. '<link rel="stylesheet" href="assets/css/landing.css">'
-	. '<style>body{margin:0;background:#04130c}</style>'
+	. '<style>body{margin:0;background:#ffffff}</style>'
 	. '</head><body>'
 	. $body
 	. '<script src="assets/js/landing.js"></script>'

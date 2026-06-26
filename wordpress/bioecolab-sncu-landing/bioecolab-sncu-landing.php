@@ -3,7 +3,7 @@
  * Plugin Name:       BioEcoLab — Landing SNCU
  * Plugin URI:        https://www.bioecolab.ro/colectare-deseuri-alimentare-sncu
  * Description:       Template de pagină pentru landing page-ul „Colectare deșeuri alimentare SNCU”, cu toate textele editabile din admin prin ACF.
- * Version:           1.0.0
+ * Version:           1.1.0
  * Author:            BioEcoLab
  * Text Domain:       bioecolab-sncu
  * Requires PHP:      7.4
@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'BSL_VERSION', '1.0.0' );
+define( 'BSL_VERSION', '1.1.0' );
 define( 'BSL_PATH', plugin_dir_path( __FILE__ ) );
 define( 'BSL_URL', plugin_dir_url( __FILE__ ) );
 define( 'BSL_TEMPLATE', 'template-sncu-landing.php' );
