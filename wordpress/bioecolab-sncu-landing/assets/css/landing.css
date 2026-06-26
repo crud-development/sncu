@@ -940,3 +940,17 @@
 }
 .bsl-footcta a.bsl-btn--primary:hover,
 .bsl-footcta .bsl-btn--primary:hover { color: var(--green-700) !important; background: #f0f7f2 !important; }
+
+/* ---- Logo brand ---- */
+.bsl-nav__logo-img { height: 44px !important; width: auto !important; display: block !important; }
+.bsl-footcta__logo {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	background: #ffffff;
+	padding: 12px 18px;
+	border-radius: 16px;
+	box-shadow: 0 16px 36px -16px rgba(0, 0, 0, .45);
+	margin-bottom: 26px;
+}
+.bsl-footcta__logo img { height: 62px; width: auto; display: block; }

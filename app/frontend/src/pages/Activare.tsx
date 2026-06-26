@@ -38,7 +38,7 @@ export function Activare() {
     <div className="auth">
       <div className="auth__box">
         <div className="auth__brand">
-          <span className="auth__logo"><Logo /></span> BIOECOLAB
+          <Logo height={46} />
         </div>
         <div className="card">
           <h1 className="auth__title">Activează-ți contul</h1>

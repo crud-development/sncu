@@ -2,7 +2,9 @@ import PDFDocument from 'pdfkit';
 import { join } from 'path';
 import { OrderDocument } from './schemas/order.schema';
 
-const FONT_DIR = join(__dirname, '..', '..', 'assets', 'fonts');
+const ASSETS_DIR = join(__dirname, '..', '..', 'assets');
+const FONT_DIR = join(ASSETS_DIR, 'fonts');
+const LOGO = join(ASSETS_DIR, 'bioecolab-logo.png');
 
 /** Generează PDF-ul „Cerere de ridicare SNCU" pentru o comandă. */
 export function buildOrderPdf(order: OrderDocument): Promise<Buffer> {
@@ -16,7 +18,13 @@ export function buildOrderPdf(order: OrderDocument): Promise<Buffer> {
     doc.registerFont('body', join(FONT_DIR, 'DejaVuSans.ttf'));
     doc.registerFont('bold', join(FONT_DIR, 'DejaVuSans-Bold.ttf'));
 
-    doc.font('bold').fontSize(18).fillColor('#0a2116').text('BIOECOLAB');
+    const headerTop = doc.y;
+    try {
+      doc.image(LOGO, doc.x, headerTop, { fit: [120, 96] });
+      doc.y = headerTop + 100;
+    } catch {
+      doc.font('bold').fontSize(18).fillColor('#0a2116').text('BIOECOLAB');
+    }
     doc
       .font('body')
       .fontSize(9)

@@ -39,7 +39,7 @@ export function Login() {
     <div className="auth">
       <div className="auth__box">
         <div className="auth__brand">
-          <span className="auth__logo"><Logo /></span> BIOECOLAB
+          <Logo height={46} />
         </div>
         <div className="card">
           <h1 className="auth__title">Autentificare</h1>

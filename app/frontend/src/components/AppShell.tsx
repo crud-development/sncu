@@ -25,8 +25,7 @@ export function AppShell() {
     <div className="shell">
       <aside className="sidebar">
         <div className="sidebar__brand">
-          <span className="auth__logo"><Logo /></span>
-          BIOECOLAB
+          <Logo height={32} />
         </div>
         <nav className="nav">
           {links.map((l) => (

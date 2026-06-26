@@ -152,8 +152,11 @@ export class MailService {
   }
 
   private layout(title: string, body: string): string {
+    const logo = this.config.get<string>('mail.logoUrl');
     return `<div style="font-family:Inter,Arial,sans-serif;max-width:560px;margin:0 auto;color:#0f172a">
-      <div style="background:#04130c;color:#fff;padding:22px 28px;border-radius:14px 14px 0 0;font-weight:800;font-size:18px">BIOECOLAB</div>
+      <div style="background:#ffffff;padding:18px 28px;border:1px solid #e2e8f0;border-bottom:0;border-radius:14px 14px 0 0;text-align:center">
+        <img src="${logo}" alt="BioEcoLab" height="52" style="height:52px;width:auto;display:inline-block" />
+      </div>
       <div style="border:1px solid #e2e8f0;border-top:0;border-radius:0 0 14px 14px;padding:28px">
         <h2 style="margin:0 0 12px">${title}</h2>
         ${body}

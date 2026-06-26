@@ -456,3 +456,15 @@ table.table {
     grid-template-columns: 1fr;
   }
 }
+
+/* ---- Brand logo (pe fundal alb pentru contrast în UI-ul închis) ---- */
+.brand-logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #ffffff;
+  padding: 7px 12px;
+  border-radius: 12px;
+  box-shadow: 0 6px 18px -8px rgba(0, 0, 0, 0.5);
+}
+.sidebar__brand .brand-logo { padding: 6px 10px; }

@@ -2,9 +2,11 @@ import PDFDocument from 'pdfkit';
 import { join } from 'path';
 import { ContractDocument } from './schemas/contract.schema';
 
-const FONT_DIR = join(__dirname, '..', '..', 'assets', 'fonts');
+const ASSETS_DIR = join(__dirname, '..', '..', 'assets');
+const FONT_DIR = join(ASSETS_DIR, 'fonts');
 const FONT_REGULAR = join(FONT_DIR, 'DejaVuSans.ttf');
 const FONT_BOLD = join(FONT_DIR, 'DejaVuSans-Bold.ttf');
+const LOGO = join(ASSETS_DIR, 'bioecolab-logo.png');
 
 /**
  * Generează PDF-ul contractului din textul randat + semnătura electronică.
@@ -23,8 +25,14 @@ export function buildContractPdf(
     doc.registerFont('body', FONT_REGULAR);
     doc.registerFont('bold', FONT_BOLD);
 
-    // Antet.
-    doc.font('bold').fontSize(18).fillColor('#0a2116').text('BIOECOLAB');
+    // Antet cu logo.
+    const headerTop = doc.y;
+    try {
+      doc.image(LOGO, doc.x, headerTop, { fit: [120, 96] });
+      doc.y = headerTop + 100;
+    } catch {
+      doc.font('bold').fontSize(18).fillColor('#0a2116').text('BIOECOLAB');
+    }
     doc
       .font('body')
       .fontSize(9)

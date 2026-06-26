@@ -37,6 +37,9 @@ export default () => ({
     pass: process.env.SMTP_PASS ?? '',
     from: process.env.MAIL_FROM ?? 'BioEcoLab <noreply@bioecolab.ro>',
     adminEmail: process.env.ADMIN_EMAIL ?? 'office@bioecolab.ro',
+    logoUrl:
+      process.env.MAIL_LOGO_URL ??
+      'https://www.bioecolab.ro/wp-content/uploads/2026/01/bioecolab-logo.png',
   },
 
   pricing: {

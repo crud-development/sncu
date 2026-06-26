@@ -27,6 +27,7 @@ function bsl_content_schema() {
 			'label'  => 'General',
 			'fields' => array(
 				'brand_name'    => array( 'label' => 'Nume brand', 'type' => 'text', 'default' => 'BIOECOLAB' ),
+				'brand_logo'    => array( 'label' => 'Logo (gol = logo-ul implicit din plugin)', 'type' => 'image', 'default' => '' ),
 				'app_base_url'  => array( 'label' => 'URL aplicație (bază). Gol = același domeniu. Ex: https://app.bioecolab.ro', 'type' => 'url', 'default' => '' ),
 				'register_path' => array( 'label' => 'Cale înregistrare + plată', 'type' => 'text', 'default' => '/app/inregistrare' ),
 				'login_path'    => array( 'label' => 'Cale autentificare', 'type' => 'text', 'default' => '/app/login' ),
@@ -308,6 +309,16 @@ function bsl_field( $name, $default = '' ) {
 		}
 	}
 	return $default;
+}
+
+/**
+ * URL-ul logo-ului brandului: din ACF dacă e setat, altfel logo-ul livrat în plugin.
+ *
+ * @return string
+ */
+function bsl_logo() {
+	$default = defined( 'BSL_URL' ) ? BSL_URL . 'assets/img/bioecolab-logo.png' : '';
+	return bsl_img( 'brand_logo', $default );
 }
 
 /**
