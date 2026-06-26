@@ -1,16 +1,27 @@
-node_modules
+# Dependencies
+node_modules/
+
+# Build artifacts (rebuilt by Docker / CI)
+dist/
+app/backend/dist/
+app/frontend/dist/
+
+# Generated preview
+preview.html
+*.zip
+
+# Environment (keep .env.example)
 .env
 .env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env.*.local
 .env.development
 .env.test
 .env.production
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-.claude
-.cursor
-wordpress
+!.env.example
+
+# Editors / OS
+.claude/
+.cursor/
+.DS_Store
+**/.DS_Store
+*.log
