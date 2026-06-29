@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiError } from '../lib/api';
 import { Modal } from '../components/Modal';
+import { Icon } from '../components/Icon';
 import {
   CATEGORII_SNCU,
   ORDER_STATUS,
@@ -96,7 +97,13 @@ export function Comenzi() {
   return (
     <>
       <div className="topbar">
-        <h1 className="page-title">Comenzi</h1>
+        <div className="page-head">
+          <span className="page-head__icon"><Icon name="order" /></span>
+          <div>
+            <h1 className="page-title">Comenzi</h1>
+            <p className="page-head__sub">Plasează și urmărește comenzile de ridicare SNCU.</p>
+          </div>
+        </div>
       </div>
 
       {!hasActiveContract && (
@@ -112,7 +119,7 @@ export function Comenzi() {
           disabled={!hasActiveContract || workpoints.length === 0}
           onClick={() => setFormOpen(true)}
         >
-          Plasează comandă
+          <Icon name="plus" size={17} /> Plasează comandă
         </button>
         <div className="spacer" />
         <input type="date" className="input" style={{ width: 'auto' }}
@@ -136,7 +143,11 @@ export function Comenzi() {
       </div>
 
       {filtered.length === 0 ? (
-        <div className="card empty">Nicio comandă pentru filtrele curente.</div>
+        <div className="card empty">
+          <div className="empty__icon"><Icon name="inbox" size={26} /></div>
+          <div className="empty__title">Nicio comandă</div>
+          <p>Nu există comenzi pentru filtrele curente.</p>
+        </div>
       ) : (
         <div className="table-wrap">
           <table className="table">

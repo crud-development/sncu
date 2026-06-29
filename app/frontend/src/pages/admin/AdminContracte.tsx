@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Icon } from '../../components/Icon';
 import {
   adminCancelContract,
   adminListContracts,
@@ -58,7 +59,15 @@ export function AdminContracte() {
 
   return (
     <>
-      <div className="topbar"><h1 className="page-title">Contracte</h1></div>
+      <div className="topbar">
+        <div className="page-head">
+          <span className="page-head__icon"><Icon name="contract" /></span>
+          <div>
+            <h1 className="page-title">Contracte</h1>
+            <p className="page-head__sub">Centralizator: caută, filtrează, anulează, exportă.</p>
+          </div>
+        </div>
+      </div>
 
       <div className="toolbar">
         <input className="input" style={{ width: 260 }} placeholder="Caută firmă / CUI / serie…"

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiError } from '../../lib/api';
+import { Icon } from '../../components/Icon';
 import { adminGetSettings, adminUpdateSettings, type Settings } from '../../lib/resources';
 
 export function AdminSetari() {
@@ -32,7 +33,15 @@ export function AdminSetari() {
 
   return (
     <>
-      <div className="topbar"><h1 className="page-title">Setări</h1></div>
+      <div className="topbar">
+        <div className="page-head">
+          <span className="page-head__icon"><Icon name="settings" /></span>
+          <div>
+            <h1 className="page-title">Setări</h1>
+            <p className="page-head__sub">Serii, dată start, template-uri de documente.</p>
+          </div>
+        </div>
+      </div>
       <div className="card" style={{ maxWidth: 720 }}>
         {msg && <div className="alert alert--success">{msg}</div>}
         {error && <div className="alert alert--error">{error}</div>}

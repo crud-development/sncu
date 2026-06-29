@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Icon } from '../../components/Icon';
 import {
   adminListOrders,
   adminSetOrderCost,
@@ -37,7 +38,15 @@ export function AdminComenzi() {
 
   return (
     <>
-      <div className="topbar"><h1 className="page-title">Comenzi</h1></div>
+      <div className="topbar">
+        <div className="page-head">
+          <span className="page-head__icon"><Icon name="order" /></span>
+          <div>
+            <h1 className="page-title">Comenzi</h1>
+            <p className="page-head__sub">Schimbă statusul, setează costul estimat, descarcă cererile.</p>
+          </div>
+        </div>
+      </div>
       <div className="table-wrap">
         <table className="table">
           <thead>

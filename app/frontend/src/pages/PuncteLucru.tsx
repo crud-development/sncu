@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiError } from '../lib/api';
 import { Modal } from '../components/Modal';
+import { Icon } from '../components/Icon';
 import { TIP_ACTIVITATE_PUNCT_LUCRU } from '../lib/constants';
 import {
   createWorkpoint,
@@ -31,7 +32,13 @@ export function PuncteLucru() {
   return (
     <>
       <div className="topbar">
-        <h1 className="page-title">Puncte de lucru</h1>
+        <div className="page-head">
+          <span className="page-head__icon"><Icon name="pin" /></span>
+          <div>
+            <h1 className="page-title">Puncte de lucru</h1>
+            <p className="page-head__sub">Gestionează adresele de ridicare și datele administratorului.</p>
+          </div>
+        </div>
       </div>
 
       {!profile.adminComplete ? (
@@ -126,10 +133,10 @@ function WorkpointsManager({
           disabled={remaining <= 0}
           onClick={() => setEditing('new')}
         >
-          Adaugă punct de lucru
+          <Icon name="plus" size={17} /> Adaugă punct de lucru
         </button>
-        <span className="muted" style={{ fontSize: 13 }}>
-          {workpoints.length} / {profile.workpointsAllowed} puncte folosite
+        <span className="badge badge--gray">
+          {workpoints.length} / {profile.workpointsAllowed} puncte
         </span>
         <div className="spacer" />
         <button
@@ -137,12 +144,16 @@ function WorkpointsManager({
           disabled={withoutContract.length === 0}
           onClick={() => setGenOpen(true)}
         >
-          Generează contract
+          <Icon name="contract" size={17} /> Generează contract
         </button>
       </div>
 
       {workpoints.length === 0 ? (
-        <div className="card empty">Niciun punct de lucru. Adaugă primul punct.</div>
+        <div className="card empty">
+          <div className="empty__icon"><Icon name="pin" size={26} /></div>
+          <div className="empty__title">Niciun punct de lucru</div>
+          <p>Adaugă primul punct de lucru ca să poți genera contractul cadru.</p>
+        </div>
       ) : (
         <div className="table-wrap">
           <table className="table">
@@ -168,19 +179,22 @@ function WorkpointsManager({
                       {w.hasContract ? 'Da' : 'Fără'}
                     </span>
                   </td>
-                  <td style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>
-                    <button className="btn btn--ghost btn--sm" onClick={() => setEditing(w)}>
-                      Editează
-                    </button>{' '}
-                    <button
-                      className="btn btn--danger btn--sm"
-                      disabled={w.hasContract}
-                      onClick={() => {
-                        if (confirm('Ștergi acest punct de lucru?')) del.mutate(w._id);
-                      }}
-                    >
-                      Șterge
-                    </button>
+                  <td>
+                    <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                      <button className="icon-btn" title="Editează" onClick={() => setEditing(w)}>
+                        <Icon name="edit" size={16} />
+                      </button>
+                      <button
+                        className="icon-btn icon-btn--danger"
+                        title="Șterge"
+                        disabled={w.hasContract}
+                        onClick={() => {
+                          if (confirm('Ștergi acest punct de lucru?')) del.mutate(w._id);
+                        }}
+                      >
+                        <Icon name="trash" size={16} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

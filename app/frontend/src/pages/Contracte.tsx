@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiError } from '../lib/api';
 import { Modal } from '../components/Modal';
+import { Icon } from '../components/Icon';
 import { SignaturePad } from '../components/SignaturePad';
 import {
   cancelContract,
@@ -46,13 +47,20 @@ export function Contracte() {
   return (
     <>
       <div className="topbar">
-        <h1 className="page-title">Contracte</h1>
+        <div className="page-head">
+          <span className="page-head__icon"><Icon name="contract" /></span>
+          <div>
+            <h1 className="page-title">Contracte</h1>
+            <p className="page-head__sub">Generează, semnează electronic și descarcă contractul cadru.</p>
+          </div>
+        </div>
       </div>
 
       {contracts.length === 0 ? (
         <div className="card empty">
-          Niciun contract încă. Mergi la{' '}
-          <Link to="/puncte-lucru">Puncte de lucru</Link> și generează contractul.
+          <div className="empty__icon"><Icon name="contract" size={26} /></div>
+          <div className="empty__title">Niciun contract încă</div>
+          <p>Mergi la <Link to="/puncte-lucru">Puncte de lucru</Link> și generează contractul cadru.</p>
         </div>
       ) : (
         <div className="table-wrap">

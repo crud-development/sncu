@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiError } from '../../lib/api';
 import { useAuth } from '../../auth/AuthContext';
 import { Modal } from '../../components/Modal';
+import { Icon } from '../../components/Icon';
 import { JUDETE, TIP_ACTIVITATE } from '../../lib/constants';
 import {
   adminCreateClient,
@@ -43,9 +44,15 @@ export function AdminClienti() {
   return (
     <>
       <div className="topbar">
-        <h1 className="page-title">Clienți</h1>
+        <div className="page-head">
+          <span className="page-head__icon"><Icon name="users" /></span>
+          <div>
+            <h1 className="page-title">Clienți</h1>
+            <p className="page-head__sub">{clients.length} clienți înregistrați în platformă.</p>
+          </div>
+        </div>
         <button className="btn btn--primary" onClick={() => setAddOpen(true)}>
-          Adaugă client (OP)
+          <Icon name="plus" size={17} /> Adaugă client (OP)
         </button>
       </div>
 
