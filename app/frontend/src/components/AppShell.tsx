@@ -1,6 +1,7 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { Logo } from './Logo';
+import { ImpersonationBar } from './ImpersonationBar';
 
 const clientLinks = [
   { to: '/dashboard', label: 'Dashboard' },
@@ -22,7 +23,9 @@ export function AppShell() {
   const links = user?.role === 'admin' ? adminLinks : clientLinks;
 
   return (
-    <div className="shell">
+    <>
+      <ImpersonationBar />
+      <div className="shell">
       <aside className="sidebar">
         <div className="sidebar__brand">
           <Logo height={32} />
@@ -52,6 +55,7 @@ export function AppShell() {
       <main className="main">
         <Outlet />
       </main>
-    </div>
+      </div>
+    </>
   );
 }

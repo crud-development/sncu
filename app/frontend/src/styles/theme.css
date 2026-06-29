@@ -472,3 +472,30 @@ a.card:hover { transform: translateY(-3px); border-color: var(--border-2); box-s
   align-items: center;
   justify-content: center;
 }
+
+/* ---- Bară impersonare ---- */
+.imp-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  background: var(--amber);
+  color: #ffffff;
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 500;
+}
+.imp-bar__text strong { font-weight: 800; }
+.imp-bar__btn {
+  background: #ffffff;
+  color: var(--amber);
+  border: 0;
+  font: inherit;
+  font-weight: 700;
+  padding: 7px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.16s ease;
+}
+.imp-bar__btn:hover { background: #fdebd3; }

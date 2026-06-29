@@ -25,3 +25,6 @@ preview.html
 .DS_Store
 **/.DS_Store
 *.log
+
+# tsc incremental
+*.tsbuildinfo

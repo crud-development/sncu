@@ -19,16 +19,26 @@ export interface AuthUser {
 interface AuthState {
   user: AuthUser | null;
   loading: boolean;
+  impersonating: boolean;
   loginWithToken: (token: string, user: AuthUser) => void;
+  /** Pornește impersonarea, salvând sesiunea de admin pentru a putea reveni. */
+  startImpersonation: (token: string, user: AuthUser) => void;
+  /** Revine la sesiunea de admin. */
+  stopImpersonation: () => void;
   logout: () => void;
   refresh: () => Promise<void>;
 }
 
 const Ctx = createContext<AuthState | null>(null);
 
+const IMP_KEY = 'sncu_imp_admin';
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [impersonating, setImpersonating] = useState<boolean>(
+    () => Boolean(localStorage.getItem(IMP_KEY)),
+  );
 
   async function refresh() {
     if (!getToken()) {
@@ -55,17 +65,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => ({
       user,
       loading,
+      impersonating,
       loginWithToken: (token, u) => {
         setToken(token);
         setUser(u);
       },
+      startImpersonation: (token, u) => {
+        // Salvează sesiunea de admin curentă (token + user) ca să putem reveni.
+        localStorage.setItem(
+          IMP_KEY,
+          JSON.stringify({ token: getToken(), user }),
+        );
+        setToken(token);
+        setUser(u);
+        setImpersonating(true);
+      },
+      stopImpersonation: () => {
+        const raw = localStorage.getItem(IMP_KEY);
+        localStorage.removeItem(IMP_KEY);
+        setImpersonating(false);
+        if (raw) {
+          try {
+            const saved = JSON.parse(raw) as { token: string; user: AuthUser };
+            setToken(saved.token);
+            setUser(saved.user);
+            return;
+          } catch {
+            /* fallthrough */
+          }
+        }
+        // Fallback: dacă nu putem restaura, deconectăm.
+        setToken(null);
+        setUser(null);
+      },
       logout: () => {
+        localStorage.removeItem(IMP_KEY);
+        setImpersonating(false);
         setToken(null);
         setUser(null);
       },
       refresh,
     }),
-    [user, loading],
+    [user, loading, impersonating],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

@@ -26,13 +26,13 @@ function statusBadge(status: string | null) {
 export function AdminClienti() {
   const { data, isLoading } = useQuery({ queryKey: ['admin-clients'], queryFn: adminListClients });
   const [addOpen, setAddOpen] = useState(false);
-  const { loginWithToken } = useAuth();
+  const { startImpersonation } = useAuth();
   const navigate = useNavigate();
 
   const impersonate = useMutation({
     mutationFn: adminImpersonate,
     onSuccess: (d) => {
-      loginWithToken(d.accessToken, d.user);
+      startImpersonation(d.accessToken, d.user);
       navigate('/dashboard');
     },
   });
