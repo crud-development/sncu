@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiError } from '../lib/api';
 import { Modal } from '../components/Modal';
 import { Icon } from '../components/Icon';
+import { TableSkeleton } from '../components/Skeleton';
 import { SignaturePad } from '../components/SignaturePad';
 import {
   cancelContract,
@@ -33,6 +34,7 @@ export function Contracte() {
 
   const cancel = useMutation({
     mutationFn: cancelContract,
+    meta: { successMessage: 'Contract anulat.' },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['contracts'] });
       qc.invalidateQueries({ queryKey: ['workpoints'] });
@@ -40,7 +42,7 @@ export function Contracte() {
   });
 
   if (isLoading) {
-    return <div className="card"><p className="muted">Se încarcă…</p></div>;
+    return <TableSkeleton cols={6} />;
   }
   const contracts = data ?? [];
 
@@ -149,6 +151,7 @@ function SignModal({
 
   const sign = useMutation({
     mutationFn: () => signContract(contract._id, signature!),
+    meta: { successMessage: 'Contract semnat cu succes.' },
     onSuccess: onSigned,
     onError: (e) => setError(apiError(e)),
   });

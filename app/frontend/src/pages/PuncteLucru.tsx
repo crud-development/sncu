@@ -3,8 +3,10 @@ import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiError } from '../lib/api';
+import { toast } from '../lib/toast';
 import { Modal } from '../components/Modal';
 import { Icon } from '../components/Icon';
+import { TableSkeleton } from '../components/Skeleton';
 import { TIP_ACTIVITATE_PUNCT_LUCRU } from '../lib/constants';
 import {
   createWorkpoint,
@@ -24,7 +26,7 @@ export function PuncteLucru() {
   const wpQ = useQuery({ queryKey: ['workpoints'], queryFn: listWorkpoints });
 
   if (profileQ.isLoading || wpQ.isLoading) {
-    return <div className="card"><p className="muted">Se încarcă…</p></div>;
+    return <TableSkeleton cols={6} />;
   }
   const profile = profileQ.data!;
   const workpoints = wpQ.data ?? [];
@@ -68,6 +70,7 @@ function AdminGate({ profile, onDone }: { profile: Profile; onDone: () => void }
     setError('');
     try {
       await updateProfile(values);
+      toast.success('Date administrator salvate.');
       onDone();
     } catch (e) {
       setError(apiError(e));
@@ -122,6 +125,7 @@ function WorkpointsManager({
 
   const del = useMutation({
     mutationFn: deleteWorkpoint,
+    meta: { successMessage: 'Punct de lucru șters.' },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['workpoints'] }),
   });
 
@@ -250,6 +254,7 @@ function WorkpointForm({
     try {
       if (workpoint) await updateWorkpoint(workpoint._id, values);
       else await createWorkpoint(values);
+      toast.success(workpoint ? 'Punct de lucru actualizat.' : 'Punct de lucru adăugat.');
       onSaved();
     } catch (e) {
       setError(apiError(e));
@@ -312,6 +317,7 @@ function GenerateContractModal({
 
   const gen = useMutation({
     mutationFn: () => generateContract(selected),
+    meta: { successMessage: 'Contract generat. Semnează-l din lista de contracte.' },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['workpoints'] });
       qc.invalidateQueries({ queryKey: ['contracts'] });

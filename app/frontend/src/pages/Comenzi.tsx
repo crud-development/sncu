@@ -3,8 +3,10 @@ import { useForm } from 'react-hook-form';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiError } from '../lib/api';
+import { toast } from '../lib/toast';
 import { Modal } from '../components/Modal';
 import { Icon } from '../components/Icon';
+import { TableSkeleton } from '../components/Skeleton';
 import {
   CATEGORII_SNCU,
   ORDER_STATUS,
@@ -56,6 +58,7 @@ export function Comenzi() {
 
   const cancel = useMutation({
     mutationFn: (id: string) => cancelOrder(id),
+    meta: { successMessage: 'Comandă anulată.' },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['orders'] }),
   });
 
@@ -91,7 +94,7 @@ export function Comenzi() {
   }
 
   if (ordersQ.isLoading || wpQ.isLoading) {
-    return <div className="card"><p className="muted">Se încarcă…</p></div>;
+    return <TableSkeleton cols={7} />;
   }
 
   return (
@@ -236,6 +239,7 @@ function OrderForm({
         estimatedQuantityKg: Number(values.estimatedQuantityKg),
         accountingValue: values.accountingValue ? Number(values.accountingValue) : undefined,
       });
+      toast.success('Comandă plasată. Vei primi un email de confirmare.');
       onSaved();
     } catch (e) {
       setError(apiError(e));

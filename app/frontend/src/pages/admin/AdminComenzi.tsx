@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Icon } from '../../components/Icon';
+import { TableSkeleton } from '../../components/Skeleton';
 import {
   adminListOrders,
   adminSetOrderCost,
@@ -30,10 +31,11 @@ export function AdminComenzi() {
 
   const setStatus = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) => adminSetOrderStatus(id, status),
+    meta: { successMessage: 'Status actualizat. Clientul a fost notificat.' },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-orders'] }),
   });
 
-  if (isLoading) return <div className="card"><p className="muted">Se încarcă…</p></div>;
+  if (isLoading) return <TableSkeleton cols={9} />;
   const orders = data ?? [];
 
   return (
@@ -72,6 +74,7 @@ function OrderRow({ order, onStatus }: { order: AdminOrder; onStatus: (s: string
   const [cost, setCost] = useState(order.estimatedCost?.toString() ?? '');
   const saveCost = useMutation({
     mutationFn: () => adminSetOrderCost(order.id, Number(cost)),
+    meta: { successMessage: 'Cost estimat salvat.' },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-orders'] }),
   });
   const next = NEXT[order.status];

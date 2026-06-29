@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Icon } from '../../components/Icon';
+import { TableSkeleton } from '../../components/Skeleton';
 import {
   adminCancelContract,
   adminListContracts,
@@ -23,10 +24,11 @@ export function AdminContracte() {
 
   const cancel = useMutation({
     mutationFn: adminCancelContract,
+    meta: { successMessage: 'Contract anulat.' },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-contracts'] }),
   });
 
-  if (isLoading) return <div className="card"><p className="muted">Se încarcă…</p></div>;
+  if (isLoading) return <TableSkeleton cols={8} />;
   const all = data ?? [];
 
   const filtered = all.filter((c) => {

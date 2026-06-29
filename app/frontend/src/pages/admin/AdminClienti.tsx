@@ -6,6 +6,7 @@ import { apiError } from '../../lib/api';
 import { useAuth } from '../../auth/AuthContext';
 import { Modal } from '../../components/Modal';
 import { Icon } from '../../components/Icon';
+import { TableSkeleton } from '../../components/Skeleton';
 import { JUDETE, TIP_ACTIVITATE } from '../../lib/constants';
 import {
   adminCreateClient,
@@ -38,7 +39,7 @@ export function AdminClienti() {
     },
   });
 
-  if (isLoading) return <div className="card"><p className="muted">Se încarcă…</p></div>;
+  if (isLoading) return <TableSkeleton cols={9} />;
   const clients = data ?? [];
 
   return (
@@ -104,6 +105,7 @@ function AddClientModal({ onClose }: { onClose: () => void }) {
 
   const create = useMutation({
     mutationFn: (v: any) => adminCreateClient(v),
+    meta: { successMessage: 'Client creat. Emailul de activare a fost trimis.' },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['admin-clients'] });
       onClose();
