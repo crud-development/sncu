@@ -22,6 +22,37 @@ export class AdminService {
     return this.workpoints.list(clientId);
   }
 
+  /** Datele complete ale unui client (pentru formularul de editare din admin). */
+  async getClient(id: string) {
+    const c = await this.clients.getOrFail(id);
+    return {
+      id: c.id,
+      companyName: c.companyName,
+      cui: c.cui,
+      regCom: c.regCom,
+      address: c.address,
+      city: c.city,
+      judet: c.judet,
+      tipActivitate: c.tipActivitate,
+      ansvsaAuthorization: c.ansvsaAuthorization,
+      email: c.email,
+      phone: c.phone,
+      contactFirstName: c.contactFirstName,
+      contactLastName: c.contactLastName,
+      adminName: c.adminName,
+      adminIdSeries: c.adminIdSeries,
+      adminIdNumber: c.adminIdNumber,
+      workpointsAllowed: c.workpointsAllowed,
+      contractExpiresAt: c.contractExpiresAt,
+    };
+  }
+
+  /** 4.1.1: editează datele unui client din admin. */
+  async updateClient(id: string, data: Record<string, unknown>) {
+    await this.clients.updateProfile(id, data);
+    return { ok: true };
+  }
+
   /** 4.1.1 — tabel clienți cu info contract. */
   async listClients() {
     const [clients, allContracts] = await Promise.all([

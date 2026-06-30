@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -10,11 +10,15 @@ import { Icon } from '../../components/Icon';
 import { TableSkeleton } from '../../components/Skeleton';
 import { JUDETE, TIP_ACTIVITATE } from '../../lib/constants';
 import {
+  adminCancelContract,
   adminCreateClient,
+  adminGetClient,
   adminImpersonate,
   adminListClients,
+  adminUpdateClient,
   downloadAdminContractPdf,
   lookupAnaf,
+  type AdminClient,
 } from '../../lib/resources';
 
 function statusBadge(status: string | null) {
@@ -28,8 +32,10 @@ function statusBadge(status: string | null) {
 }
 
 export function AdminClienti() {
+  const qc = useQueryClient();
   const { data, isLoading } = useQuery({ queryKey: ['admin-clients'], queryFn: adminListClients });
   const [addOpen, setAddOpen] = useState(false);
+  const [editing, setEditing] = useState<AdminClient | null>(null);
   const { startImpersonation } = useAuth();
   const navigate = useNavigate();
 
@@ -40,8 +46,13 @@ export function AdminClienti() {
       navigate('/dashboard');
     },
   });
+  const cancelContract = useMutation({
+    mutationFn: adminCancelContract,
+    meta: { successMessage: 'Contract anulat.' },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-clients'] }),
+  });
 
-  if (isLoading) return <TableSkeleton cols={9} />;
+  if (isLoading) return <TableSkeleton cols={10} />;
   const clients = data ?? [];
 
   return (
@@ -64,7 +75,7 @@ export function AdminClienti() {
           <thead>
             <tr>
               <th>Firmă</th><th>Contact</th><th>Email</th><th>Telefon</th>
-              <th>Contract</th><th>Status</th><th>Expirare</th><th>Plată</th><th></th>
+              <th>Contract</th><th>Status</th><th>Creat</th><th>Expirare</th><th>Plată</th><th></th>
             </tr>
           </thead>
           <tbody>
@@ -82,12 +93,24 @@ export function AdminClienti() {
                   ) : '—'}
                 </td>
                 <td>{statusBadge(c.contractStatus)}</td>
+                <td>{c.createdAt ? new Date(c.createdAt).toLocaleDateString('ro-RO') : '—'}</td>
                 <td>{c.contractExpiresAt ? new Date(c.contractExpiresAt).toLocaleDateString('ro-RO') : '—'}</td>
                 <td><span className="badge badge--gray">{c.paymentType}</span></td>
-                <td style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>
-                  <button className="btn btn--ghost btn--sm" onClick={() => impersonate.mutate(c.id)}>
-                    Impersonare
-                  </button>
+                <td>
+                  <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', alignItems: 'center' }}>
+                    <button className="icon-btn" title="Editează clientul" onClick={() => setEditing(c)}>
+                      <Icon name="edit" size={16} />
+                    </button>
+                    {c.contractId && c.contractStatus === 'Semnat' && (
+                      <button className="icon-btn icon-btn--danger" title="Anulează contractul"
+                        onClick={() => { if (confirm('Anulezi contractul acestui client?')) cancelContract.mutate(c.contractId!); }}>
+                        <Icon name="x" size={16} />
+                      </button>
+                    )}
+                    <button className="btn btn--ghost btn--sm" onClick={() => impersonate.mutate(c.id)}>
+                      Impersonare
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -96,7 +119,70 @@ export function AdminClienti() {
       </div>
 
       {addOpen && <AddClientModal onClose={() => setAddOpen(false)} />}
+      {editing && <EditClientModal client={editing} onClose={() => setEditing(null)} />}
     </>
+  );
+}
+
+function EditClientModal({ client, onClose }: { client: AdminClient; onClose: () => void }) {
+  const qc = useQueryClient();
+  const [error, setError] = useState('');
+  const { register, handleSubmit, reset, formState: { isSubmitting } } = useForm<any>();
+  const detailQ = useQuery({ queryKey: ['admin-client', client.id], queryFn: () => adminGetClient(client.id) });
+
+  useEffect(() => { if (detailQ.data) reset(detailQ.data); }, [detailQ.data, reset]);
+
+  const save = useMutation({
+    mutationFn: (v: any) => adminUpdateClient(client.id, v),
+    meta: { successMessage: 'Client actualizat.' },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-clients'] }); onClose(); },
+    onError: (e) => setError(apiError(e)),
+  });
+
+  return (
+    <Modal title={`Editează ${client.companyName}`} onClose={onClose} wide>
+      {error && <div className="alert alert--error">{error}</div>}
+      {detailQ.isLoading ? (
+        <div className="skeleton" style={{ height: 220 }} />
+      ) : (
+        <form onSubmit={handleSubmit((v) => save.mutate(v))}>
+          <div className="form-section-title">Date firmă</div>
+          <div className="form-grid">
+            <div className="field"><label>Denumire firmă</label><input className="input" {...register('companyName')} /></div>
+            <div className="field"><label>Nr. Registrul Comerțului</label><input className="input" {...register('regCom')} /></div>
+            <div className="field field--full"><label>Adresă sediu social</label><input className="input" {...register('address')} /></div>
+            <div className="field"><label>Oraș</label><input className="input" {...register('city')} /></div>
+            <div className="field"><label>Județ</label>
+              <select className="select" {...register('judet')}>
+                <option value="">Alege…</option>{JUDETE.map((j) => <option key={j} value={j}>{j}</option>)}
+              </select></div>
+            <div className="field field--full"><label>Tip activitate</label>
+              <select className="select" {...register('tipActivitate')}>
+                <option value="">Alege…</option>{TIP_ACTIVITATE.map((t) => <option key={t} value={t}>{t}</option>)}
+              </select></div>
+            <div className="field"><label>Autorizație ANSVSA</label><input className="input" {...register('ansvsaAuthorization')} /></div>
+          </div>
+
+          <div className="form-section-title">Persoană de contact</div>
+          <div className="form-grid">
+            <div className="field"><label>Prenume</label><input className="input" {...register('contactFirstName')} /></div>
+            <div className="field"><label>Nume</label><input className="input" {...register('contactLastName')} /></div>
+            <div className="field"><label>Telefon</label><input className="input" {...register('phone')} /></div>
+          </div>
+
+          <div className="form-section-title">Administrator</div>
+          <div className="form-grid">
+            <div className="field field--full"><label>Nume administrator</label><input className="input" {...register('adminName')} /></div>
+            <div className="field"><label>Serie CI</label><input className="input" {...register('adminIdSeries')} /></div>
+            <div className="field"><label>Număr CI</label><input className="input" {...register('adminIdNumber')} /></div>
+          </div>
+
+          <button className="btn btn--primary btn--block" disabled={isSubmitting}>
+            {isSubmitting ? 'Se salvează…' : 'Salvează modificările'}
+          </button>
+        </form>
+      )}
+    </Modal>
   );
 }
 

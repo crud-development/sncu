@@ -21,10 +21,12 @@ import { AdminService } from './admin.service';
 import {
   AdminCreateClientDto,
   AdminCreateOrderDto,
+  AdminUpdateOrderDto,
   SetOrderCostDto,
   UpdateOrderStatusDto,
   UpdateSettingsDto,
 } from './dto/admin.dto';
+import { UpdateProfileDto } from '../clients/dto/profile.dto';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(UserRole.ADMIN)
@@ -51,6 +53,16 @@ export class AdminClientsController {
     return this.admin.clientWorkpoints(id);
   }
 
+  @Get(':id')
+  getOne(@Param('id') id: string) {
+    return this.admin.getClient(id);
+  }
+
+  @Patch(':id')
+  update(@Param('id') id: string, @Body() dto: UpdateProfileDto) {
+    return this.admin.updateClient(id, dto as Record<string, unknown>);
+  }
+
   @Post(':id/impersonate')
   impersonate(@Param('id') id: string) {
     return this.auth.tokenForClient(id);
@@ -74,6 +86,16 @@ export class AdminOrdersController {
   @Post()
   create(@Body() dto: AdminCreateOrderDto) {
     return this.orders.adminCreate(dto.clientId, dto);
+  }
+
+  @Get(':id')
+  get(@Param('id') id: string) {
+    return this.orders.getOrFail(id);
+  }
+
+  @Patch(':id')
+  update(@Param('id') id: string, @Body() dto: AdminUpdateOrderDto) {
+    return this.orders.adminUpdate(id, dto as Record<string, any>);
   }
 
   @Patch(':id/status')

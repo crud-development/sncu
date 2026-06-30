@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiError } from '../../lib/api';
@@ -14,10 +14,12 @@ import {
 import {
   adminClientWorkpoints,
   adminCreateOrder,
+  adminGetOrder,
   adminListClients,
   adminListOrders,
   adminSetOrderCost,
   adminSetOrderStatus,
+  adminUpdateOrder,
   downloadAdminOrderPdf,
   type AdminOrder,
   type OrderStatus,
@@ -42,6 +44,7 @@ export function AdminComenzi() {
   const qc = useQueryClient();
   const { data, isLoading } = useQuery({ queryKey: ['admin-orders'], queryFn: adminListOrders });
   const [addOpen, setAddOpen] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
 
   const setStatus = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) => adminSetOrderStatus(id, status),
@@ -67,6 +70,7 @@ export function AdminComenzi() {
         </button>
       </div>
       {addOpen && <AdminOrderForm onClose={() => setAddOpen(false)} onSaved={() => { setAddOpen(false); qc.invalidateQueries({ queryKey: ['admin-orders'] }); }} />}
+      {editId && <AdminOrderForm editOrderId={editId} onClose={() => setEditId(null)} onSaved={() => { setEditId(null); qc.invalidateQueries({ queryKey: ['admin-orders'] }); }} />}
       <div className="table-wrap">
         <table className="table">
           <thead>
@@ -78,7 +82,8 @@ export function AdminComenzi() {
           <tbody>
             {orders.map((o) => (
               <OrderRow key={o.id} order={o}
-                onStatus={(status) => setStatus.mutate({ id: o.id, status })} />
+                onStatus={(status) => setStatus.mutate({ id: o.id, status })}
+                onEdit={() => setEditId(o.id)} />
             ))}
           </tbody>
         </table>
@@ -87,7 +92,7 @@ export function AdminComenzi() {
   );
 }
 
-function OrderRow({ order, onStatus }: { order: AdminOrder; onStatus: (s: string) => void }) {
+function OrderRow({ order, onStatus, onEdit }: { order: AdminOrder; onStatus: (s: string) => void; onEdit: () => void }) {
   const qc = useQueryClient();
   const [cost, setCost] = useState(order.estimatedCost?.toString() ?? '');
   const saveCost = useMutation({
@@ -123,26 +128,53 @@ function OrderRow({ order, onStatus }: { order: AdminOrder; onStatus: (s: string
             onClick={() => saveCost.mutate()}>✓</button>
         </div>
       </td>
-      <td style={{ textAlign: 'right' }}>
-        <button className="btn btn--ghost btn--sm" onClick={() => downloadAdminOrderPdf(order.id)}>PDF</button>
+      <td>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <button className="icon-btn" title="Vezi / editează comanda" onClick={onEdit}>
+            <Icon name="edit" size={16} />
+          </button>
+          <button className="icon-btn" title="Descarcă cererea (PDF)" onClick={() => downloadAdminOrderPdf(order.id)}>
+            <Icon name="download" size={16} />
+          </button>
+        </div>
       </td>
     </tr>
   );
 }
 
-/* ─── 4.2.2: adăugare comandă din admin (status auto Confirmată) ─── */
-function AdminOrderForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+const ORDER_EDITABLE = [
+  'desiredDate', 'timeInterval', 'wasteName', 'origin', 'sncuCategory',
+  'estimatedQuantityKg', 'exactAddress', 'productState', 'accountingValue',
+  'countryOfOrigin', 'producer', 'distributor', 'packagingType', 'activity',
+  'sanitaryAuthNumber', 'contactPerson', 'contactPhone', 'contactEmail',
+  'csvDoc', 'observations',
+];
+
+/* ─── 4.2.1/4.2.2: adăugare (create) sau vizualizare/editare (edit) comandă ─── */
+function AdminOrderForm({ onClose, onSaved, editOrderId }: { onClose: () => void; onSaved: () => void; editOrderId?: string }) {
+  const isEdit = Boolean(editOrderId);
   const [error, setError] = useState('');
-  const { register, handleSubmit, watch, setValue, formState: { isSubmitting } } = useForm<any>();
+  const { register, handleSubmit, watch, setValue, reset, formState: { isSubmitting } } = useForm<any>();
   const clientId = watch('clientId');
 
-  const clientsQ = useQuery({ queryKey: ['admin-clients'], queryFn: adminListClients });
+  const clientsQ = useQuery({ queryKey: ['admin-clients'], queryFn: adminListClients, enabled: !isEdit });
   const wpQ = useQuery({
     queryKey: ['admin-client-workpoints', clientId],
     queryFn: () => adminClientWorkpoints(clientId),
-    enabled: Boolean(clientId),
+    enabled: !isEdit && Boolean(clientId),
+  });
+  const orderQ = useQuery({
+    queryKey: ['admin-order', editOrderId],
+    queryFn: () => adminGetOrder(editOrderId!),
+    enabled: isEdit,
   });
   const workpoints: Workpoint[] = wpQ.data ?? [];
+
+  useEffect(() => {
+    if (orderQ.data) {
+      reset({ ...orderQ.data, desiredDate: orderQ.data.desiredDate?.slice(0, 10) });
+    }
+  }, [orderQ.data, reset]);
 
   function onWpChange(id: string) {
     const wp = workpoints.find((w) => w._id === id);
@@ -158,11 +190,20 @@ function AdminOrderForm({ onClose, onSaved }: { onClose: () => void; onSaved: ()
   async function onSubmit(values: any) {
     setError('');
     try {
-      await adminCreateOrder({
-        ...values,
-        estimatedQuantityKg: Number(values.estimatedQuantityKg),
-        accountingValue: values.accountingValue ? Number(values.accountingValue) : undefined,
-      });
+      const num = (v: any) => (v === '' || v == null ? undefined : Number(v));
+      if (isEdit) {
+        const payload: Record<string, unknown> = {};
+        for (const k of ORDER_EDITABLE) if (values[k] !== undefined) payload[k] = values[k];
+        payload.estimatedQuantityKg = num(values.estimatedQuantityKg);
+        payload.accountingValue = num(values.accountingValue);
+        await adminUpdateOrder(editOrderId!, payload);
+      } else {
+        await adminCreateOrder({
+          ...values,
+          estimatedQuantityKg: Number(values.estimatedQuantityKg),
+          accountingValue: num(values.accountingValue),
+        });
+      }
       onSaved();
     } catch (e) {
       setError(apiError(e));
@@ -170,29 +211,42 @@ function AdminOrderForm({ onClose, onSaved }: { onClose: () => void; onSaved: ()
   }
 
   return (
-    <Modal title="Adaugă comandă (din admin)" onClose={onClose} wide>
+    <Modal title={isEdit ? `Comandă ${orderQ.data?.orderNo ?? ''}` : 'Adaugă comandă (din admin)'} onClose={onClose} wide>
       {error && <div className="alert alert--error">{error}</div>}
-      <p className="muted" style={{ fontSize: 14, marginBottom: 16 }}>
-        Comanda primește automat status <strong>Confirmată</strong> și clientul este notificat pe email.
-      </p>
+      {isEdit ? (
+        orderQ.data && (
+          <div className="alert alert--info" style={{ marginBottom: 16 }}>
+            <Icon name="building" size={18} />
+            <span><strong>{orderQ.data.companyName}</strong> · {orderQ.data.exactAddress}</span>
+          </div>
+        )
+      ) : (
+        <p className="muted" style={{ fontSize: 14, marginBottom: 16 }}>
+          Comanda primește automat status <strong>Confirmată</strong> și clientul este notificat pe email.
+        </p>
+      )}
       <form onSubmit={handleSubmit(onSubmit)}>
         <div className="form-grid">
-          <div className="field">
-            <label>Client *</label>
-            <select className="select" {...register('clientId', { required: true })}
-              onChange={(e) => { setValue('clientId', e.target.value); setValue('workpointId', ''); }}>
-              <option value="">Alege clientul…</option>
-              {(clientsQ.data ?? []).map((c) => <option key={c.id} value={c.id}>{c.companyName} · {c.cui}</option>)}
-            </select>
-          </div>
-          <div className="field">
-            <label>Punct de lucru *</label>
-            <select className="select" disabled={!clientId} {...register('workpointId', { required: true })}
-              onChange={(e) => { setValue('workpointId', e.target.value); onWpChange(e.target.value); }}>
-              <option value="">{clientId ? 'Alege…' : 'Alege clientul întâi'}</option>
-              {workpoints.map((w) => <option key={w._id} value={w._id}>{w.denumire || w.address}</option>)}
-            </select>
-          </div>
+          {!isEdit && (
+            <>
+              <div className="field">
+                <label>Client *</label>
+                <select className="select" {...register('clientId', { required: true })}
+                  onChange={(e) => { setValue('clientId', e.target.value); setValue('workpointId', ''); }}>
+                  <option value="">Alege clientul…</option>
+                  {(clientsQ.data ?? []).map((c) => <option key={c.id} value={c.id}>{c.companyName} · {c.cui}</option>)}
+                </select>
+              </div>
+              <div className="field">
+                <label>Punct de lucru *</label>
+                <select className="select" disabled={!clientId} {...register('workpointId', { required: true })}
+                  onChange={(e) => { setValue('workpointId', e.target.value); onWpChange(e.target.value); }}>
+                  <option value="">{clientId ? 'Alege…' : 'Alege clientul întâi'}</option>
+                  {workpoints.map((w) => <option key={w._id} value={w._id}>{w.denumire || w.address}</option>)}
+                </select>
+              </div>
+            </>
+          )}
           <div className="field"><label>Data dorită *</label>
             <input type="date" className="input" {...register('desiredDate', { required: true })} /></div>
           <div className="field"><label>Interval orar</label>
@@ -243,7 +297,7 @@ function AdminOrderForm({ onClose, onSaved }: { onClose: () => void; onSaved: ()
             <input className="input" {...register('observations')} /></div>
         </div>
         <button className="btn btn--primary btn--block" disabled={isSubmitting}>
-          {isSubmitting ? 'Se adaugă…' : 'Adaugă comanda'}
+          {isSubmitting ? 'Se salvează…' : isEdit ? 'Salvează modificările' : 'Adaugă comanda'}
         </button>
       </form>
     </Modal>

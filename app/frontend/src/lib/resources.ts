@@ -106,6 +106,9 @@ export interface Order {
   contactEmail?: string;
   csvDoc?: string;
   observations?: string;
+  companyName?: string;
+  cui?: string;
+  estimatedCost?: number;
   createdAt: string;
 }
 
@@ -229,6 +232,10 @@ export const adminCreateClient = (data: Record<string, unknown>) =>
   api.post('/admin/clients', data).then((r) => r.data);
 export const adminImpersonate = (id: string) =>
   api.post<{ accessToken: string; user: any }>(`/admin/clients/${id}/impersonate`).then((r) => r.data);
+export const adminGetClient = (id: string) =>
+  api.get<Profile>(`/admin/clients/${id}`).then((r) => r.data);
+export const adminUpdateClient = (id: string, data: Record<string, unknown>) =>
+  api.patch(`/admin/clients/${id}`, data).then((r) => r.data);
 
 export const adminListContracts = () =>
   api.get<AdminContract[]>('/admin/contracts').then((r) => r.data);
@@ -243,6 +250,10 @@ export const adminClientWorkpoints = (clientId: string) =>
   api.get<Workpoint[]>(`/admin/clients/${clientId}/workpoints`).then((r) => r.data);
 export const adminCreateOrder = (data: Record<string, unknown>) =>
   api.post('/admin/orders', data).then((r) => r.data);
+export const adminGetOrder = (id: string) =>
+  api.get<Order>(`/admin/orders/${id}`).then((r) => r.data);
+export const adminUpdateOrder = (id: string, data: Record<string, unknown>) =>
+  api.patch(`/admin/orders/${id}`, data).then((r) => r.data);
 export const adminSetOrderStatus = (id: string, status: string, note?: string) =>
   api.patch(`/admin/orders/${id}/status`, { status, note }).then((r) => r.data);
 export const adminSetOrderCost = (id: string, estimatedCost: number) =>

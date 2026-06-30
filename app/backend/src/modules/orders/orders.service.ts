@@ -197,4 +197,17 @@ export class OrdersService {
     await order.save();
     return order;
   }
+
+  /** 4.2.1: editează câmpurile unei comenzi din admin. */
+  async adminUpdate(
+    id: string,
+    data: Record<string, any>,
+  ): Promise<OrderDocument> {
+    const order = await this.getOrFail(id);
+    const { desiredDate, ...rest } = data;
+    Object.assign(order, rest);
+    if (desiredDate) order.desiredDate = new Date(desiredDate);
+    await order.save();
+    return order;
+  }
 }

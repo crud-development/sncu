@@ -34,6 +34,30 @@ export class AdminCreateClientDto {
   @IsOptional() @IsInt() @Min(1) workpoints?: number;
 }
 
+/** 4.2.1 — editarea unei comenzi din admin (toate câmpurile opționale). */
+export class AdminUpdateOrderDto {
+  @IsOptional() @IsDateString() desiredDate?: string;
+  @IsOptional() @IsString() timeInterval?: string;
+  @IsOptional() @IsString() wasteName?: string;
+  @IsOptional() @IsString() origin?: string;
+  @IsOptional() @IsString() sncuCategory?: string;
+  @IsOptional() @Type(() => Number) @IsNumber() estimatedQuantityKg?: number;
+  @IsOptional() @IsString() exactAddress?: string;
+  @IsOptional() @IsString() productState?: string;
+  @IsOptional() @Type(() => Number) @IsNumber() accountingValue?: number;
+  @IsOptional() @IsString() countryOfOrigin?: string;
+  @IsOptional() @IsString() producer?: string;
+  @IsOptional() @IsString() distributor?: string;
+  @IsOptional() @IsString() packagingType?: string;
+  @IsOptional() @IsString() activity?: string;
+  @IsOptional() @IsString() sanitaryAuthNumber?: string;
+  @IsOptional() @IsString() contactPerson?: string;
+  @IsOptional() @IsString() contactPhone?: string;
+  @IsOptional() @IsString() contactEmail?: string;
+  @IsOptional() @IsString() csvDoc?: string;
+  @IsOptional() @IsString() observations?: string;
+}
+
 export class UpdateOrderStatusDto {
   @IsIn(Object.values(OrderStatus)) status: OrderStatus;
   @IsOptional() @IsString() note?: string;
