@@ -5,6 +5,11 @@ import { apiError } from '../../lib/api';
 import { Icon } from '../../components/Icon';
 import { adminGetSettings, adminUpdateSettings, type Settings } from '../../lib/resources';
 
+const EDITABLE: (keyof Settings)[] = [
+  'contractSeries', 'orderSeries', 'contractStartDate',
+  'contractTemplateUrl', 'orderTemplateUrl', 'pvTemplateUrl', 'contractTemplateText',
+];
+
 export function AdminSetari() {
   const qc = useQueryClient();
   const { data, isLoading } = useQuery({ queryKey: ['admin-settings'], queryFn: adminGetSettings });
@@ -45,7 +50,11 @@ export function AdminSetari() {
       <div className="card" style={{ maxWidth: 720 }}>
         {msg && <div className="alert alert--success">{msg}</div>}
         {error && <div className="alert alert--error">{error}</div>}
-        <form onSubmit={handleSubmit((v) => save.mutate(v))}>
+        <form onSubmit={handleSubmit((v) => {
+          const payload: Partial<Settings> = {};
+          EDITABLE.forEach((k) => { if (v[k] !== undefined) (payload as any)[k] = v[k]; });
+          save.mutate(payload);
+        })}>
           <div className="form-grid">
             <div className="field"><label>Serie contracte</label><input className="input" {...register('contractSeries')} /></div>
             <div className="field"><label>Serie comenzi</label><input className="input" {...register('orderSeries')} /></div>

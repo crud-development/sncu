@@ -13,7 +13,9 @@ import { SettingsService } from '../settings/settings.service';
 import { MailService } from '../mail/mail.service';
 import { CreateOrderDto } from './dto/order.dto';
 import { Order, OrderDocument, OrderStatus } from './schemas/order.schema';
-import { buildOrderPdf } from './order-pdf';
+import { buildOrderPdf, buildOrderPdfFromTemplate } from './order-pdf';
+import { renderOrderDriveTemplate } from './order-template';
+import { fetchGoogleDocText } from '../contracts/google-docs';
 
 /** Tranziții permise de status (US-07). */
 const TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
@@ -111,7 +113,7 @@ export class OrdersService {
     if (order.contactEmail) {
       let pdf: Buffer | undefined;
       try {
-        pdf = await buildOrderPdf(order);
+        pdf = await this.renderOrderPdf(order);
       } catch {
         /* fără atașament dacă PDF-ul eșuează */
       }
@@ -176,8 +178,30 @@ export class OrdersService {
   async pdf(
     order: OrderDocument,
   ): Promise<{ buffer: Buffer; filename: string }> {
-    const buffer = await buildOrderPdf(order);
+    const buffer = await this.renderOrderPdf(order);
     return { buffer, filename: `Cerere_ridicare_${order.orderNo}.pdf` };
+  }
+
+  /** Generează PDF-ul cererii: template din Drive dacă e setat, altfel layout intern. */
+  private async renderOrderPdf(order: OrderDocument): Promise<Buffer> {
+    const settings = await this.settings.get();
+    if (settings.orderTemplateUrl) {
+      const docText = await fetchGoogleDocText(settings.orderTemplateUrl);
+      if (docText) {
+        const client = await this.clients.findById(order.clientId.toString());
+        return buildOrderPdfFromTemplate(
+          renderOrderDriveTemplate(docText, order, {
+            regCom: client?.regCom ?? '',
+            judet: client?.judet ?? '',
+            localitate: client?.city ?? '',
+            adminCI: [client?.adminIdSeries, client?.adminIdNumber]
+              .filter(Boolean)
+              .join(' '),
+          }),
+        );
+      }
+    }
+    return buildOrderPdf(order);
   }
 
   // ─── Admin ───

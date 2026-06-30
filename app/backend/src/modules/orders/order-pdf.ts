@@ -6,7 +6,37 @@ const ASSETS_DIR = join(__dirname, '..', '..', 'assets');
 const FONT_DIR = join(ASSETS_DIR, 'fonts');
 const LOGO = join(ASSETS_DIR, 'bioecolab-logo.png');
 
-/** Generează PDF-ul „Cerere de ridicare SNCU" pentru o comandă. */
+/** Generează PDF-ul cererii din textul randat al template-ului (Google Docs). */
+export function buildOrderPdfFromTemplate(rendered: string): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ size: 'A4', margin: 56 });
+    const chunks: Buffer[] = [];
+    doc.on('data', (c) => chunks.push(c));
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
+
+    doc.registerFont('body', join(FONT_DIR, 'DejaVuSans.ttf'));
+    doc.registerFont('bold', join(FONT_DIR, 'DejaVuSans-Bold.ttf'));
+
+    const headerTop = doc.y;
+    try {
+      doc.image(LOGO, doc.x, headerTop, { fit: [120, 96] });
+      doc.y = headerTop + 90;
+    } catch {
+      /* fără logo */
+    }
+
+    doc.font('body').fontSize(10).fillColor('#0f172a');
+    rendered.split('\n').forEach((line) => {
+      const isHeading = /^\d+\.\s/.test(line) || (line.trim().length > 0 && line === line.toUpperCase());
+      doc.font(isHeading ? 'bold' : 'body').text(line, { align: 'left' });
+    });
+
+    doc.end();
+  });
+}
+
+/** Generează PDF-ul „Cerere de ridicare SNCU" pentru o comandă (layout intern). */
 export function buildOrderPdf(order: OrderDocument): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: 'A4', margin: 56 });

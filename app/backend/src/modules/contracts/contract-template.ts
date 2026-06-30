@@ -65,6 +65,52 @@ function fmtDate(d?: Date): string {
   return d ? new Date(d).toLocaleDateString('ro-RO') : '__________';
 }
 
+/**
+ * Randează template-ul din Google Docs (placeholdere `<...>`) cu datele contractului.
+ * Mapping pentru template-ul oficial BioEcoLab.
+ */
+export function renderDriveTemplate(text: string, contract: ContractDocument): string {
+  const s = contract.snapshot;
+  const date = fmtDate(contract.signedAt ?? (contract as any).createdAt);
+  const activities = s.workpoints.map((w) => w.tipActivitate).filter(Boolean).join(', ');
+  const sanitary = s.workpoints.map((w) => w.sanitaryAuthNumber).filter(Boolean).join(', ');
+  const wpAddresses = s.workpoints.map((w) => w.address).filter(Boolean).join('; ');
+
+  const map: Record<string, string> = {
+    SERIE: contract.series ?? '',
+    serie: contract.series ?? '',
+    numar: contract.number != null ? String(contract.number) : '',
+    Data: date,
+    'data emiterii': date,
+    'nume firma': s.company.companyName ?? '',
+    'nume companie': s.company.companyName ?? '',
+    cui: s.company.cui ?? '',
+    'nr reg com': s.company.regCom ?? '',
+    adresa: s.company.address ?? '',
+    judet: s.company.judet ?? '',
+    Localitate: s.company.city ?? '',
+    localitate: s.company.city ?? '',
+    telefon: s.contact.phone ?? '',
+    'adresa email': s.contact.email ?? '',
+    reprezentant: s.admin.name ?? '',
+    administrator: s.admin.name ?? '',
+    'nume si prenume': s.contact.person ?? '',
+    'serie si nr CI Admin': [s.admin.idSeries, s.admin.idNumber].filter(Boolean).join(' '),
+    activitatea: activities,
+    'aut sanitar veterinara': sanitary,
+    'punct de lucru': wpAddresses,
+    pret: '330 lei + TVA',
+    semnatura: '(semnătură electronică — vezi mai jos)',
+    caen: '',
+    'data start aut': '',
+    'data stop aut': '',
+  };
+
+  return text.replace(/<([^<>]{1,40})>/g, (full, key) =>
+    Object.prototype.hasOwnProperty.call(map, key) ? map[key] : full,
+  );
+}
+
 /** Înlocuiește placeholderele din template cu datele contractului. */
 export function renderContract(template: string, contract: ContractDocument): string {
   const s = contract.snapshot;

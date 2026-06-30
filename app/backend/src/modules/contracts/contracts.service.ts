@@ -20,7 +20,9 @@ import {
 import {
   DEFAULT_CONTRACT_TEMPLATE,
   renderContract,
+  renderDriveTemplate,
 } from './contract-template';
+import { fetchGoogleDocText } from './google-docs';
 import { buildContractPdf } from './contract-pdf';
 
 @Injectable()
@@ -210,9 +212,19 @@ export class ContractsService {
 
   private async renderDoc(contract: ContractDocument): Promise<string> {
     const settings = await this.settings.get();
-    const template =
-      settings.contractTemplateText?.trim() || DEFAULT_CONTRACT_TEMPLATE;
-    return renderContract(template, contract);
+
+    // 1. Text manual din Setări (are prioritate, format {{...}}).
+    const manual = settings.contractTemplateText?.trim();
+    if (manual) return renderContract(manual, contract);
+
+    // 2. Template-ul live din Google Docs (format <...>).
+    if (settings.contractTemplateUrl) {
+      const docText = await fetchGoogleDocText(settings.contractTemplateUrl);
+      if (docText) return renderDriveTemplate(docText, contract);
+    }
+
+    // 3. Template intern implicit.
+    return renderContract(DEFAULT_CONTRACT_TEMPLATE, contract);
   }
 
   /** Statusul efectiv: un contract Semnat expirat se afișează ca Expirat. */
