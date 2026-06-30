@@ -3,6 +3,7 @@ import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiError } from '../../lib/api';
+import { toast } from '../../lib/toast';
 import { useAuth } from '../../auth/AuthContext';
 import { Modal } from '../../components/Modal';
 import { Icon } from '../../components/Icon';
@@ -13,6 +14,7 @@ import {
   adminImpersonate,
   adminListClients,
   downloadAdminContractPdf,
+  lookupAnaf,
 } from '../../lib/resources';
 
 function statusBadge(status: string | null) {
@@ -101,7 +103,30 @@ export function AdminClienti() {
 function AddClientModal({ onClose }: { onClose: () => void }) {
   const qc = useQueryClient();
   const [error, setError] = useState('');
-  const { register, handleSubmit, formState: { isSubmitting } } = useForm<any>();
+  const [anafLoading, setAnafLoading] = useState(false);
+  const { register, handleSubmit, watch, setValue, formState: { isSubmitting } } = useForm<any>();
+
+  async function fetchAnaf() {
+    const cui = (watch('cui') || '').trim();
+    if (!cui) {
+      toast.error('Introdu CUI-ul firmei.');
+      return;
+    }
+    setAnafLoading(true);
+    try {
+      const d = await lookupAnaf(cui);
+      setValue('companyName', d.companyName);
+      setValue('regCom', d.regCom);
+      setValue('address', d.address);
+      setValue('city', d.city);
+      if (d.judet) setValue('judet', d.judet);
+      toast.success('Date preluate de la ANAF.');
+    } catch (e) {
+      toast.error(apiError(e));
+    } finally {
+      setAnafLoading(false);
+    }
+  }
 
   const create = useMutation({
     mutationFn: (v: any) => adminCreateClient(v),
@@ -119,7 +144,26 @@ function AddClientModal({ onClose }: { onClose: () => void }) {
       <form onSubmit={handleSubmit((v) => create.mutate(v))}>
         <div className="form-grid">
           <div className="field"><label>Denumire firmă *</label><input className="input" {...register('companyName', { required: true })} /></div>
-          <div className="field"><label>CUI / CIF *</label><input className="input" {...register('cui', { required: true })} /></div>
+          <div className="field"><label>CUI / CIF *</label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                className="input"
+                placeholder="ex: RO12345678"
+                {...register('cui', { required: true })}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); fetchAnaf(); } }}
+              />
+              <button
+                type="button"
+                className="btn btn--ghost btn--sm"
+                style={{ flex: 'none' }}
+                disabled={anafLoading}
+                onClick={fetchAnaf}
+                title="Preia datele firmei de la ANAF"
+              >
+                {anafLoading ? '…' : <><Icon name="download" size={15} /> ANAF</>}
+              </button>
+            </div>
+          </div>
           <div className="field"><label>Nr. Reg. Comerțului</label><input className="input" {...register('regCom')} /></div>
           <div className="field"><label>Adresă sediu social *</label><input className="input" {...register('address', { required: true })} /></div>
           <div className="field"><label>Oraș *</label><input className="input" {...register('city', { required: true })} /></div>
