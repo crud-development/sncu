@@ -63,23 +63,20 @@ export class OrdersService {
     clientId: string,
     dto: CreateOrderDto,
     autoConfirm = false,
+    skipContractCheck = false,
   ): Promise<OrderDocument> {
     const client = await this.clients.getOrFail(clientId);
-    if (!(await this.contracts.hasActiveContract(clientId))) {
+    if (!skipContractCheck && !(await this.contracts.hasActiveContract(clientId))) {
       throw new BadRequestException(
         'Ai nevoie de un contract activ pentru a plasa o comandă.',
       );
     }
     const wp = await this.workpoints.getOwned(clientId, dto.workpointId);
 
-    const { series, number } = await this.settings.allocateOrderNumber();
-    const orderNo = `${series}-${number}`;
-
-    const order = await this.model.create({
+    const base = {
       ...dto,
       clientId: new Types.ObjectId(clientId),
       workpointId: wp._id,
-      orderNo,
       status: autoConfirm ? OrderStatus.CONFIRMATA : OrderStatus.PLASATA,
       desiredDate: new Date(dto.desiredDate),
       exactAddress: dto.exactAddress || wp.address,
@@ -90,14 +87,45 @@ export class OrdersService {
       contactEmail: dto.contactEmail || client.email,
       companyName: client.companyName,
       cui: client.cui,
-    });
+    };
+
+    // Alocă numărul de comandă; reîncearcă dacă seria desincronizată produce coliziuni.
+    let order: OrderDocument | null = null;
+    let orderNo = '';
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const { series, number } = await this.settings.allocateOrderNumber();
+      orderNo = `${series}-${number}`;
+      try {
+        order = await this.model.create({ ...base, orderNo });
+        break;
+      } catch (err: any) {
+        if (err?.code === 11000 && attempt < 4) continue;
+        throw err;
+      }
+    }
+    if (!order) {
+      throw new BadRequestException('Nu s-a putut aloca numărul comenzii.');
+    }
 
     const details = `Punct de lucru: ${wp.denumire || wp.address} · ${order.sncuCategory} · ${order.estimatedQuantityKg} kg · data ${new Date(order.desiredDate).toLocaleDateString('ro-RO')}`;
-    await this.mail
-      .sendOrderPlaced(order.contactEmail!, orderNo, details)
-      .catch(() => undefined);
+    if (order.contactEmail) {
+      const mail = autoConfirm
+        ? this.mail.sendOrderStatus(
+            order.contactEmail,
+            orderNo,
+            OrderStatus.CONFIRMATA,
+            details,
+          )
+        : this.mail.sendOrderPlaced(order.contactEmail, orderNo, details);
+      await mail.catch(() => undefined);
+    }
 
     return order;
+  }
+
+  /** 4.2.2: comandă adăugată din admin — auto Confirmată, fără gate de contract. */
+  adminCreate(clientId: string, dto: CreateOrderDto): Promise<OrderDocument> {
+    return this.create(clientId, dto, true, true);
   }
 
   /** US-07: clientul poate anula doar o comandă `Plasată`. */

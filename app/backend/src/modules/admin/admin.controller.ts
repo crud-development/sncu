@@ -20,6 +20,7 @@ import { SettingsService } from '../settings/settings.service';
 import { AdminService } from './admin.service';
 import {
   AdminCreateClientDto,
+  AdminCreateOrderDto,
   SetOrderCostDto,
   UpdateOrderStatusDto,
   UpdateSettingsDto,
@@ -45,6 +46,11 @@ export class AdminClientsController {
     return { id: client.id, status: client.status };
   }
 
+  @Get(':id/workpoints')
+  workpoints(@Param('id') id: string) {
+    return this.admin.clientWorkpoints(id);
+  }
+
   @Post(':id/impersonate')
   impersonate(@Param('id') id: string) {
     return this.auth.tokenForClient(id);
@@ -63,6 +69,11 @@ export class AdminOrdersController {
   @Get()
   list() {
     return this.admin.listOrders();
+  }
+
+  @Post()
+  create(@Body() dto: AdminCreateOrderDto) {
+    return this.orders.adminCreate(dto.clientId, dto);
   }
 
   @Patch(':id/status')

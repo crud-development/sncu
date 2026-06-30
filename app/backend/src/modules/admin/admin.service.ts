@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { ClientsService } from '../clients/clients.service';
 import { ContractsService } from '../contracts/contracts.service';
 import { OrdersService } from '../orders/orders.service';
+import { WorkpointsService } from '../workpoints/workpoints.service';
 import {
   ContractDocument,
   ContractStatus,
@@ -13,7 +14,13 @@ export class AdminService {
     private readonly clients: ClientsService,
     private readonly contracts: ContractsService,
     private readonly orders: OrdersService,
+    private readonly workpoints: WorkpointsService,
   ) {}
+
+  /** Punctele de lucru ale unui client (pentru formularul de comandă din admin). */
+  clientWorkpoints(clientId: string) {
+    return this.workpoints.list(clientId);
+  }
 
   /** 4.1.1 — tabel clienți cu info contract. */
   async listClients() {

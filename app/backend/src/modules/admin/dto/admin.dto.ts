@@ -10,6 +10,12 @@ import {
   Min,
 } from 'class-validator';
 import { OrderStatus } from '../../orders/schemas/order.schema';
+import { CreateOrderDto } from '../../orders/dto/order.dto';
+
+/** 4.2.2 — comandă adăugată din admin (câmpurile US-06 + clientul vizat). */
+export class AdminCreateOrderDto extends CreateOrderDto {
+  @IsString() clientId: string;
+}
 
 /** 4.1.2 — adăugare client din admin (plată OP automat). */
 export class AdminCreateClientDto {

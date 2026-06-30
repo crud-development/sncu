@@ -3,6 +3,7 @@ import { ClientsModule } from '../clients/clients.module';
 import { AuthModule } from '../auth/auth.module';
 import { ContractsModule } from '../contracts/contracts.module';
 import { OrdersModule } from '../orders/orders.module';
+import { WorkpointsModule } from '../workpoints/workpoints.module';
 import { SettingsModule } from '../settings/settings.module';
 import { AdminService } from './admin.service';
 import { SeedService } from './seed.service';
@@ -19,6 +20,7 @@ import {
     AuthModule,
     ContractsModule,
     OrdersModule,
+    WorkpointsModule,
     SettingsModule,
   ],
   controllers: [

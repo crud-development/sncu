@@ -239,6 +239,10 @@ export const adminGetContractText = (id: string) =>
 
 export const adminListOrders = () =>
   api.get<AdminOrder[]>('/admin/orders').then((r) => r.data);
+export const adminClientWorkpoints = (clientId: string) =>
+  api.get<Workpoint[]>(`/admin/clients/${clientId}/workpoints`).then((r) => r.data);
+export const adminCreateOrder = (data: Record<string, unknown>) =>
+  api.post('/admin/orders', data).then((r) => r.data);
 export const adminSetOrderStatus = (id: string, status: string, note?: string) =>
   api.patch(`/admin/orders/${id}/status`, { status, note }).then((r) => r.data);
 export const adminSetOrderCost = (id: string, estimatedCost: number) =>
