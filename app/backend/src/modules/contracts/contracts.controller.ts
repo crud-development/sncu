@@ -1,8 +1,10 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
+  Patch,
   Post,
   Res,
   UseGuards,
@@ -29,6 +31,21 @@ export class ContractsController {
   @Post('generate')
   generate(@CurrentUser() user: AuthUser, @Body() dto: GenerateContractDto) {
     return this.service.generate(user.id, dto.workpointIds);
+  }
+
+  @Patch(':id')
+  edit(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Body() dto: GenerateContractDto,
+  ) {
+    return this.service.editDraft(user.id, id, dto.workpointIds);
+  }
+
+  @Delete(':id')
+  async remove(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    await this.service.deleteDraft(user.id, id);
+    return { ok: true };
   }
 
   @Get(':id/text')

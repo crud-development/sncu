@@ -87,7 +87,24 @@ export class ContractsService {
       );
     }
 
-    const snapshot: ContractSnapshot = {
+    const contract = await this.model.create({
+      clientId: new Types.ObjectId(clientId),
+      workpointIds: wps.map((w) => w._id),
+      status: ContractStatus.DRAFT,
+      snapshot: this.buildSnapshot(client, wps),
+    });
+
+    await this.workpoints.markContracted(
+      wps.map((w) => w.id),
+      true,
+    );
+
+    return contract;
+  }
+
+  /** Construiește snapshot-ul (datele înghețate) din client + puncte de lucru. */
+  private buildSnapshot(client: any, wps: any[]): ContractSnapshot {
+    return {
       company: {
         companyName: client.companyName,
         cui: client.cui,
@@ -117,20 +134,72 @@ export class ContractsService {
         contactPhone: w.contactPhone,
       })),
     };
+  }
 
-    const contract = await this.model.create({
-      clientId: new Types.ObjectId(clientId),
-      workpointIds: wps.map((w) => w._id),
-      status: ContractStatus.DRAFT,
-      snapshot,
-    });
+  /**
+   * US-05/4.3: editează un contract Draft — schimbă punctele de lucru incluse și
+   * reîmprospătează datele înghețate din punctele de lucru curente.
+   */
+  async editDraft(
+    clientId: string,
+    id: string,
+    workpointIds: string[],
+  ): Promise<ContractDocument> {
+    if (!workpointIds?.length) {
+      throw new BadRequestException('Selectează cel puțin un punct de lucru.');
+    }
+    const contract = await this.getOwned(clientId, id);
+    if (contract.status !== ContractStatus.DRAFT) {
+      throw new BadRequestException('Doar contractele Draft pot fi editate.');
+    }
 
+    // Eliberează punctele curente, apoi validează noua selecție.
+    await this.workpoints.markContracted(
+      contract.workpointIds.map((w) => w.toString()),
+      false,
+    );
+    const wps = await Promise.all(
+      workpointIds.map((wid) => this.workpoints.getOwned(clientId, wid)),
+    );
+    const blocked = wps.filter((w) => w.hasContract);
+    if (blocked.length) {
+      // Re-marchează punctele inițiale și raportează conflictul.
+      await this.workpoints.markContracted(
+        contract.workpointIds.map((w) => w.toString()),
+        true,
+      );
+      throw new BadRequestException(
+        'Unele puncte de lucru au deja un alt contract.',
+      );
+    }
+
+    const client = await this.clients.getOrFail(clientId);
+    contract.workpointIds = wps.map((w) => w._id);
+    contract.snapshot = this.buildSnapshot(client, wps);
+    await contract.save();
     await this.workpoints.markContracted(
       wps.map((w) => w.id),
       true,
     );
-
     return contract;
+  }
+
+  /** Șterge un contract Draft (eliberează punctele de lucru). */
+  async deleteDraft(clientId: string, id: string): Promise<void> {
+    const contract = await this.getOwned(clientId, id);
+    if (contract.status !== ContractStatus.DRAFT) {
+      throw new BadRequestException('Doar contractele Draft pot fi șterse.');
+    }
+    await this.workpoints.markContracted(
+      contract.workpointIds.map((w) => w.toString()),
+      false,
+    );
+    await contract.deleteOne();
+  }
+
+  /** Text contract pentru admin (orice contract). */
+  async renderTextById(id: string): Promise<string> {
+    return this.renderDoc(await this.getAnyOrFail(id));
   }
 
   /** Textul integral al contractului (pentru citire înainte de semnare). */

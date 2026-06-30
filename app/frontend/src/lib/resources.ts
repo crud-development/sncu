@@ -70,6 +70,10 @@ export const generateContract = (workpointIds: string[]) =>
   api.post<Contract>('/contracts/generate', { workpointIds }).then((r) => r.data);
 export const getContractText = (id: string) =>
   api.get<{ text: string }>(`/contracts/${id}/text`).then((r) => r.data.text);
+export const editContract = (id: string, workpointIds: string[]) =>
+  api.patch<Contract>(`/contracts/${id}`, { workpointIds }).then((r) => r.data);
+export const deleteContract = (id: string) =>
+  api.delete(`/contracts/${id}`).then((r) => r.data);
 export const signContract = (id: string, signature: string) =>
   api.post<Contract>(`/contracts/${id}/sign`, { signature }).then((r) => r.data);
 export const cancelContract = (id: string) =>
@@ -230,6 +234,8 @@ export const adminListContracts = () =>
   api.get<AdminContract[]>('/admin/contracts').then((r) => r.data);
 export const adminCancelContract = (id: string) =>
   api.post(`/admin/contracts/${id}/cancel`).then((r) => r.data);
+export const adminGetContractText = (id: string) =>
+  api.get<{ text: string }>(`/admin/contracts/${id}/text`).then((r) => r.data.text);
 
 export const adminListOrders = () =>
   api.get<AdminOrder[]>('/admin/orders').then((r) => r.data);

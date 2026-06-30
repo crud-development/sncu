@@ -1,11 +1,14 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Icon } from '../../components/Icon';
+import { Modal } from '../../components/Modal';
 import { TableSkeleton } from '../../components/Skeleton';
 import {
   adminCancelContract,
+  adminGetContractText,
   adminListContracts,
   downloadAdminContractPdf,
+  type AdminContract,
 } from '../../lib/resources';
 
 const STATUSES = ['Draft', 'Semnat', 'Anulat', 'Expirat'];
@@ -21,6 +24,7 @@ export function AdminContracte() {
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [cFrom, setCFrom] = useState('');
   const [cTo, setCTo] = useState('');
+  const [viewing, setViewing] = useState<AdminContract | null>(null);
 
   const cancel = useMutation({
     mutationFn: adminCancelContract,
@@ -106,16 +110,23 @@ export function AdminContracte() {
                   <td>{c.workpointsCount}</td>
                   <td>{fmt(c.expiresAt)}</td>
                   <td><span className={`badge ${STATUS_CLASS[c.status]}`}>{c.status}</span></td>
-                  <td style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>
-                    {c.contractNo && (
-                      <button className="btn btn--ghost btn--sm" onClick={() => downloadAdminContractPdf(c.id)}>PDF</button>
-                    )}{' '}
-                    {c.canCancel && (
-                      <button className="btn btn--danger btn--sm"
-                        onClick={() => { if (confirm('Anulezi contractul semnat?')) cancel.mutate(c.id); }}>
-                        Anulează
+                  <td>
+                    <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', alignItems: 'center' }}>
+                      <button className="icon-btn" title="Deschide contractul" onClick={() => setViewing(c)}>
+                        <Icon name="eye" size={16} />
                       </button>
-                    )}
+                      {c.contractNo && (
+                        <button className="icon-btn" title="Descarcă PDF" onClick={() => downloadAdminContractPdf(c.id)}>
+                          <Icon name="download" size={16} />
+                        </button>
+                      )}
+                      {c.canCancel && (
+                        <button className="btn btn--danger btn--sm"
+                          onClick={() => { if (confirm('Anulezi contractul semnat?')) cancel.mutate(c.id); }}>
+                          Anulează
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -123,6 +134,33 @@ export function AdminContracte() {
           </table>
         </div>
       )}
+
+      {viewing && <AdminContractView contract={viewing} onClose={() => setViewing(null)} />}
     </>
+  );
+}
+
+function AdminContractView({ contract, onClose }: { contract: AdminContract; onClose: () => void }) {
+  const textQ = useQuery({
+    queryKey: ['admin-contract-text', contract.id],
+    queryFn: () => adminGetContractText(contract.id),
+  });
+  return (
+    <Modal title={contract.contractNo ? `Contract ${contract.contractNo}` : 'Contract (draft)'} onClose={onClose} wide>
+      <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', marginBottom: 16, fontSize: 13 }}>
+        <span className="muted">Firmă: <strong style={{ color: 'var(--ink)' }}>{contract.companyName}</strong></span>
+        <span className="muted">CUI: {contract.cui}</span>
+        <span className="muted">Status: {contract.status}</span>
+        <span className="muted">Expirare: {fmt(contract.expiresAt)}</span>
+      </div>
+      <div className="contract-text">
+        {textQ.isLoading ? 'Se încarcă contractul…' : textQ.data}
+      </div>
+      {contract.contractNo && (
+        <button className="btn btn--ghost btn--block" style={{ marginTop: 16 }} onClick={() => downloadAdminContractPdf(contract.id)}>
+          <Icon name="download" size={16} /> Descarcă PDF
+        </button>
+      )}
+    </Modal>
   );
 }

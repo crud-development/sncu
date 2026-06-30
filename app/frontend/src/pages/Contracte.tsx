@@ -8,12 +8,16 @@ import { TableSkeleton } from '../components/Skeleton';
 import { SignaturePad } from '../components/SignaturePad';
 import {
   cancelContract,
+  deleteContract,
   downloadContractPdf,
+  editContract,
   getContractText,
   listContracts,
+  listWorkpoints,
   signContract,
   type Contract,
   type ContractStatus,
+  type Workpoint,
 } from '../lib/resources';
 
 const STATUS_CLASS: Record<ContractStatus, string> = {
@@ -31,19 +35,26 @@ export function Contracte() {
   const qc = useQueryClient();
   const { data, isLoading } = useQuery({ queryKey: ['contracts'], queryFn: listContracts });
   const [signing, setSigning] = useState<Contract | null>(null);
+  const [viewing, setViewing] = useState<Contract | null>(null);
+  const [editing, setEditing] = useState<Contract | null>(null);
+
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ['contracts'] });
+    qc.invalidateQueries({ queryKey: ['workpoints'] });
+  };
 
   const cancel = useMutation({
     mutationFn: cancelContract,
     meta: { successMessage: 'Contract anulat.' },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['contracts'] });
-      qc.invalidateQueries({ queryKey: ['workpoints'] });
-    },
+    onSuccess: invalidate,
+  });
+  const del = useMutation({
+    mutationFn: deleteContract,
+    meta: { successMessage: 'Draft șters.' },
+    onSuccess: invalidate,
   });
 
-  if (isLoading) {
-    return <TableSkeleton cols={6} />;
-  }
+  if (isLoading) return <TableSkeleton cols={6} />;
   const contracts = data ?? [];
 
   return (
@@ -53,7 +64,7 @@ export function Contracte() {
           <span className="page-head__icon"><Icon name="contract" /></span>
           <div>
             <h1 className="page-title">Contracte</h1>
-            <p className="page-head__sub">Generează, semnează electronic și descarcă contractul cadru.</p>
+            <p className="page-head__sub">Deschide, generează, editează (draft), semnează și descarcă.</p>
           </div>
         </div>
       </div>
@@ -80,37 +91,50 @@ export function Contracte() {
             <tbody>
               {contracts.map((c) => (
                 <tr key={c._id}>
-                  <td>{c.contractNo ?? <span className="muted">(draft)</span>}</td>
+                  <td>{c.contractNo ? <strong>{c.contractNo}</strong> : <span className="muted">(draft)</span>}</td>
                   <td>{c.snapshot.workpoints.length}</td>
                   <td>{fmt(c.signedAt ?? c.createdAt)}</td>
                   <td>{fmt(c.expiresAt)}</td>
+                  <td><span className={`badge ${STATUS_CLASS[c.status]}`}>{c.status}</span></td>
                   <td>
-                    <span className={`badge ${STATUS_CLASS[c.status]}`}>{c.status}</span>
-                  </td>
-                  <td style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>
-                    {c.status === 'Draft' && (
-                      <button className="btn btn--primary btn--sm" onClick={() => setSigning(c)}>
-                        Citește & semnează
-                      </button>
-                    )}
-                    {(c.status === 'Semnat' || c.status === 'Expirat') && (
-                      <button
-                        className="btn btn--ghost btn--sm"
-                        onClick={() => downloadContractPdf(c._id)}
-                      >
-                        Descarcă PDF
-                      </button>
-                    )}{' '}
-                    {(c.status === 'Draft' || c.status === 'Semnat') && (
-                      <button
-                        className="btn btn--danger btn--sm"
-                        onClick={() => {
-                          if (confirm('Anulezi acest contract?')) cancel.mutate(c._id);
-                        }}
-                      >
-                        Anulează
-                      </button>
-                    )}
+                    <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', alignItems: 'center' }}>
+                      {c.status === 'Draft' ? (
+                        <>
+                          <button className="btn btn--primary btn--sm" onClick={() => setSigning(c)}>
+                            <Icon name="edit" size={15} /> Semnează
+                          </button>
+                          <button className="icon-btn" title="Editează punctele de lucru" onClick={() => setEditing(c)}>
+                            <Icon name="edit" size={16} />
+                          </button>
+                          <button
+                            className="icon-btn icon-btn--danger"
+                            title="Șterge draftul"
+                            onClick={() => { if (confirm('Ștergi acest draft de contract?')) del.mutate(c._id); }}
+                          >
+                            <Icon name="trash" size={16} />
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button className="icon-btn" title="Deschide contractul" onClick={() => setViewing(c)}>
+                            <Icon name="eye" size={16} />
+                          </button>
+                          {(c.status === 'Semnat' || c.status === 'Expirat') && (
+                            <button className="icon-btn" title="Descarcă PDF" onClick={() => downloadContractPdf(c._id)}>
+                              <Icon name="download" size={16} />
+                            </button>
+                          )}
+                          {c.status === 'Semnat' && (
+                            <button
+                              className="btn btn--danger btn--sm"
+                              onClick={() => { if (confirm('Anulezi acest contract?')) cancel.mutate(c._id); }}
+                            >
+                              Anulează
+                            </button>
+                          )}
+                        </>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -120,16 +144,88 @@ export function Contracte() {
       )}
 
       {signing && (
-        <SignModal
-          contract={signing}
-          onClose={() => setSigning(null)}
-          onSigned={() => {
-            setSigning(null);
-            qc.invalidateQueries({ queryKey: ['contracts'] });
-          }}
-        />
+        <SignModal contract={signing} onClose={() => setSigning(null)} onSigned={() => { setSigning(null); invalidate(); }} />
+      )}
+      {viewing && <ViewModal contract={viewing} onClose={() => setViewing(null)} />}
+      {editing && (
+        <EditDraftModal contract={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); invalidate(); }} />
       )}
     </>
+  );
+}
+
+/* ─── Vizualizare contract (read-only) ─── */
+function ViewModal({ contract, onClose }: { contract: Contract; onClose: () => void }) {
+  const textQ = useQuery({
+    queryKey: ['contract-text', contract._id],
+    queryFn: () => getContractText(contract._id),
+  });
+  return (
+    <Modal title={contract.contractNo ? `Contract ${contract.contractNo}` : 'Contract (draft)'} onClose={onClose} wide>
+      <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', marginBottom: 16, fontSize: 13 }}>
+        <span className="muted">Status: <strong style={{ color: 'var(--ink)' }}>{contract.status}</strong></span>
+        <span className="muted">Data: {fmt(contract.signedAt ?? contract.createdAt)}</span>
+        <span className="muted">Expirare: {fmt(contract.expiresAt)}</span>
+        <span className="muted">Puncte de lucru: {contract.snapshot.workpoints.length}</span>
+      </div>
+      <div className="contract-text">
+        {textQ.isLoading ? 'Se încarcă contractul…' : textQ.data}
+      </div>
+      {(contract.status === 'Semnat' || contract.status === 'Expirat') && (
+        <button className="btn btn--ghost btn--block" style={{ marginTop: 16 }} onClick={() => downloadContractPdf(contract._id)}>
+          <Icon name="download" size={16} /> Descarcă PDF
+        </button>
+      )}
+    </Modal>
+  );
+}
+
+/* ─── Editare draft: schimbă punctele de lucru incluse ─── */
+function EditDraftModal({ contract, onClose, onSaved }: { contract: Contract; onClose: () => void; onSaved: () => void }) {
+  const wpQ = useQuery({ queryKey: ['workpoints'], queryFn: listWorkpoints });
+  const [selected, setSelected] = useState<string[]>(contract.workpointIds);
+  const [error, setError] = useState('');
+
+  const save = useMutation({
+    mutationFn: () => editContract(contract._id, selected),
+    meta: { successMessage: 'Draft actualizat.' },
+    onSuccess: onSaved,
+    onError: (e) => setError(apiError(e)),
+  });
+
+  function toggle(id: string) {
+    setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
+  }
+
+  // Disponibile: punctele fără alt contract + cele incluse deja în acest draft.
+  const all: Workpoint[] = wpQ.data ?? [];
+  const available = all.filter((w) => !w.hasContract || contract.workpointIds.includes(w._id));
+
+  return (
+    <Modal title="Editează draftul de contract" onClose={onClose}>
+      <p className="muted" style={{ fontSize: 14, marginBottom: 16 }}>
+        Bifează punctele de lucru incluse în contract. Datele se reîmprospătează din punctele curente.
+      </p>
+      {error && <div className="alert alert--error">{error}</div>}
+      {wpQ.isLoading ? (
+        <div className="skeleton" style={{ height: 120 }} />
+      ) : (
+        <div style={{ display: 'grid', gap: 10, marginBottom: 18 }}>
+          {available.map((w) => (
+            <label key={w._id} className="card" style={{ display: 'flex', gap: 12, alignItems: 'center', padding: '14px 16px', cursor: 'pointer' }}>
+              <input type="checkbox" checked={selected.includes(w._id)} onChange={() => toggle(w._id)} />
+              <span>
+                <strong>{w.denumire || w.address}</strong><br />
+                <small className="muted">{w.address} · {w.tipActivitate}</small>
+              </span>
+            </label>
+          ))}
+        </div>
+      )}
+      <button className="btn btn--primary btn--block" disabled={selected.length === 0 || save.isPending} onClick={() => save.mutate()}>
+        {save.isPending ? 'Se salvează…' : `Salvează draftul (${selected.length})`}
+      </button>
+    </Modal>
   );
 }
 
@@ -157,7 +253,7 @@ function SignModal({
   });
 
   return (
-    <Modal title="Semnează contractul" onClose={onClose} wide>
+    <Modal title="Citește & semnează contractul" onClose={onClose} wide>
       {error && <div className="alert alert--error">{error}</div>}
 
       <div className="contract-text">
