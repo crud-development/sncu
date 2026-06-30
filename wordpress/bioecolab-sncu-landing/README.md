@@ -57,13 +57,13 @@ aplicație, iar „Autentificare" la **login**. URL-urile se configurează în t
 *General*:
 
 - **URL aplicație (bază)** — lasă gol dacă aplicația e pe același domeniu (linkuri
-  relative: `/app/inregistrare`, `/app/login`); sau pune domeniul aplicației, ex.
+  relative: `/inregistrare`, `/login`); sau pune domeniul aplicației, ex.
   `https://app.bioecolab.ro`, și toate butoanele se actualizează automat.
-- **Cale înregistrare + plată** — implicit `/app/inregistrare` (fluxul cu Stripe).
-- **Cale autentificare** — implicit `/app/login`.
+- **Cale înregistrare + plată** — implicit `/inregistrare` (fluxul cu Stripe).
+- **Cale autentificare** — implicit `/login`.
 
-> Aplicația (Task 2) servește SPA-ul sub `/app`, deci `/app/inregistrare` și
-> `/app/login` sunt rutele reale ale portalului.
+> Aplicația (Task 2) servește SPA-ul din root, deci `/inregistrare` și
+> `/login` sunt rutele reale ale portalului.
 
 ## Personalizarea designului
 

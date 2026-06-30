@@ -288,7 +288,7 @@ export class ContractsService {
     await this.clients.updateProfile(clientId, { contractExpiresAt: expiresAt });
 
     // Notificare admin.
-    const link = `${this.config.get('appUrl')}/app/contracte`;
+    const link = `${this.config.get('appUrl')}/contracte`;
     await this.mail
       .notifyAdminContractSigned(
         this.config.get<string>('mail.adminEmail') ?? '',

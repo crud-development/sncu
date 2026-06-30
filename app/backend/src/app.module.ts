@@ -28,10 +28,9 @@ import { AnafModule } from './modules/anaf/anaf.module';
       }),
     }),
 
-    // Servește SPA-ul React buildat sub /app (frontend/dist). API-ul rămâne pe /api.
+    // Servește SPA-ul React buildat din root (frontend/dist). API-ul rămâne pe /api.
     ServeStaticModule.forRoot({
       rootPath: join(__dirname, '..', '..', 'frontend', 'dist'),
-      serveRoot: '/app',
       exclude: ['/api/{*splat}'],
     }),
 

@@ -4,7 +4,7 @@ import react from '@vitejs/plugin-react';
 // SPA servit de NestJS din frontend/dist. În dev, proxy /api → backend :3000.
 export default defineConfig({
   plugins: [react()],
-  base: '/app/',
+  base: '/',
   build: {
     outDir: 'dist',
     emptyOutDir: true,

@@ -1,7 +1,7 @@
 # BioEcoLab SNCU — aplicație fullstack
 
 Backend **NestJS + MongoDB** care servește și frontendul **React + Vite (SPA)** buildat.
-SPA-ul rulează sub `/app` (ex: `/app/login`, `/app/inregistrare`), legat de butoanele CTA
+SPA-ul rulează din root (ex: `/login`, `/inregistrare`), legat de butoanele CTA
 din landing page-ul WordPress. API-ul este pe `/api`.
 
 ## Structură
@@ -26,7 +26,7 @@ docker compose up -d mongo      # MongoDB pe localhost:27018
 cd backend && npm install && npm run start:dev   # http://localhost:3000
 
 # Frontend (terminal 2) — dev server cu HMR + proxy /api → :3000
-cd frontend && npm install && npm run dev        # http://localhost:5173/app/
+cd frontend && npm install && npm run dev        # http://localhost:5173/
 ```
 
 > Notă: portul host Mongo este **27018** (27017 poate fi ocupat de alt proiect local).
@@ -37,7 +37,7 @@ cd frontend && npm install && npm run dev        # http://localhost:5173/app/
 ```bash
 cd frontend && npm run build     # generează frontend/dist
 cd ../backend && npm run build && npm run start:prod
-# → NestJS servește API pe /api ȘI SPA-ul pe /app, pe http://localhost:3000
+# → NestJS servește API pe /api ȘI SPA-ul din root, pe http://localhost:3000
 ```
 
 ## Email în dev
@@ -78,7 +78,7 @@ Provisioning-ul este idempotent (re-confirmarea nu creează cont dublu).
 
 La prima pornire se creează automat un cont de administrator (vezi log-ul backendului):
 `office@bioecolab.ro` / `admin1234` (configurabil prin `ADMIN_LOGIN_EMAIL` / `ADMIN_PASSWORD`).
-Adminul se loghează pe `/app/login` și e redirecționat în panoul de administrare.
+Adminul se loghează pe `/login` și e redirecționat în panoul de administrare.
 
 ## Flux auth (validat cap-coadă)
 

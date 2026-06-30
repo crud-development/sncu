@@ -65,7 +65,7 @@ export class AuthService {
   }
 
   async sendActivation(client: ClientDocument): Promise<void> {
-    const link = `${this.config.get('appUrl')}/app/activare?token=${client.activationToken}`;
+    const link = `${this.config.get('appUrl')}/activare?token=${client.activationToken}`;
     await this.mail.sendActivation(client.email, client.companyName, link);
   }
 
@@ -155,7 +155,7 @@ export class AuthService {
     client.activationExpiresAt = new Date(Date.now() + ttl * 3600_000);
     await client.save();
 
-    const link = `${this.config.get('appUrl')}/app/reset-parola?token=${client.activationToken}`;
+    const link = `${this.config.get('appUrl')}/reset-parola?token=${client.activationToken}`;
     await this.mail.sendPasswordReset(client.email, link);
   }
 
