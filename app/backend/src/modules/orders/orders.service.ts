@@ -109,14 +109,21 @@ export class OrdersService {
 
     const details = `Punct de lucru: ${wp.denumire || wp.address} · ${order.sncuCategory} · ${order.estimatedQuantityKg} kg · data ${new Date(order.desiredDate).toLocaleDateString('ro-RO')}`;
     if (order.contactEmail) {
+      let pdf: Buffer | undefined;
+      try {
+        pdf = await buildOrderPdf(order);
+      } catch {
+        /* fără atașament dacă PDF-ul eșuează */
+      }
       const mail = autoConfirm
         ? this.mail.sendOrderStatus(
             order.contactEmail,
             orderNo,
             OrderStatus.CONFIRMATA,
             details,
+            pdf,
           )
-        : this.mail.sendOrderPlaced(order.contactEmail, orderNo, details);
+        : this.mail.sendOrderPlaced(order.contactEmail, orderNo, details, pdf);
       await mail.catch(() => undefined);
     }
 

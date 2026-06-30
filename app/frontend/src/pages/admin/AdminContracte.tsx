@@ -24,6 +24,8 @@ export function AdminContracte() {
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [cFrom, setCFrom] = useState('');
   const [cTo, setCTo] = useState('');
+  const [eFrom, setEFrom] = useState('');
+  const [eTo, setETo] = useState('');
   const [viewing, setViewing] = useState<AdminContract | null>(null);
 
   const cancel = useMutation({
@@ -42,6 +44,11 @@ export function AdminContracte() {
     const date = c.signedAt ?? c.createdAt;
     if (cFrom && new Date(date) < new Date(cFrom)) return false;
     if (cTo && new Date(date) > new Date(cTo + 'T23:59:59')) return false;
+    if ((eFrom || eTo)) {
+      if (!c.expiresAt) return false;
+      if (eFrom && new Date(c.expiresAt) < new Date(eFrom)) return false;
+      if (eTo && new Date(c.expiresAt) > new Date(eTo + 'T23:59:59')) return false;
+    }
     return true;
   });
 
@@ -78,9 +85,12 @@ export function AdminContracte() {
       <div className="toolbar">
         <input className="input" style={{ width: 260 }} placeholder="Caută firmă / CUI / serie…"
           value={search} onChange={(e) => setSearch(e.target.value)} />
-        <span className="muted" style={{ fontSize: 13 }}>Data:</span>
+        <span className="muted" style={{ fontSize: 13 }}>Data contract:</span>
         <input type="date" className="input" style={{ width: 'auto' }} value={cFrom} onChange={(e) => setCFrom(e.target.value)} />
         <input type="date" className="input" style={{ width: 'auto' }} value={cTo} onChange={(e) => setCTo(e.target.value)} />
+        <span className="muted" style={{ fontSize: 13 }}>Expiră:</span>
+        <input type="date" className="input" style={{ width: 'auto' }} value={eFrom} onChange={(e) => setEFrom(e.target.value)} />
+        <input type="date" className="input" style={{ width: 'auto' }} value={eTo} onChange={(e) => setETo(e.target.value)} />
         <div className="spacer" />
         {STATUSES.map((s) => (
           <button key={s} className={`btn btn--sm ${statusFilter.includes(s) ? 'btn--primary' : 'btn--ghost'}`}

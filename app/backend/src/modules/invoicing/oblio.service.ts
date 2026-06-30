@@ -8,6 +8,7 @@ export interface InvoiceResult {
   total: number;
   mock: boolean;
   link?: string;
+  pdf?: Buffer;
 }
 
 export interface InvoiceInput {
@@ -74,12 +75,28 @@ export class OblioService {
       );
 
       const data = res.data.data;
+
+      // Preia PDF-ul facturii (pentru atașarea pe email).
+      let pdf: Buffer | undefined;
+      if (data.link) {
+        try {
+          const pdfRes = await axios.get(data.link, {
+            responseType: 'arraybuffer',
+            headers: { Authorization: `Bearer ${accessToken}` },
+          });
+          pdf = Buffer.from(pdfRes.data);
+        } catch {
+          /* fără PDF dacă descărcarea eșuează */
+        }
+      }
+
       return {
         series: data.seriesName,
         number: String(data.number),
         total: input.total,
         mock: false,
         link: data.link,
+        pdf,
       };
     } catch (err: any) {
       this.logger.error(

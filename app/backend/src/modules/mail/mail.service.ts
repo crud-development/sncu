@@ -109,11 +109,19 @@ export class MailService {
     });
   }
 
-  /** Confirmare plasare comandă către client. */
+  /** Atașament „Cerere de ridicare" (PDF) pentru emailurile de comandă. */
+  private orderPdfAttachment(orderNo: string, pdf?: Buffer) {
+    return pdf
+      ? [{ filename: `Cerere_ridicare_${orderNo}.pdf`, content: pdf, contentType: 'application/pdf' }]
+      : undefined;
+  }
+
+  /** Confirmare plasare comandă către client (cu cererea de ridicare atașată). */
   async sendOrderPlaced(
     to: string,
     orderNo: string,
     details: string,
+    pdf?: Buffer,
   ): Promise<void> {
     await this.send({
       to,
@@ -122,17 +130,19 @@ export class MailService {
         `Comanda ${orderNo} a fost plasată`,
         `<p>Am înregistrat comanda ta de ridicare SNCU. Statusul curent este <strong>Plasată</strong>.</p>
          <p>${details}</p>
-         <p>Vei primi notificări pe email la fiecare schimbare de status.</p>`,
+         <p>Atașat găsești documentul de cerere de ridicare precompletat.</p>`,
       ),
+      attachments: this.orderPdfAttachment(orderNo, pdf),
     });
   }
 
-  /** Notificare schimbare status comandă. */
+  /** Notificare schimbare status comandă (cu cererea de ridicare atașată). */
   async sendOrderStatus(
     to: string,
     orderNo: string,
     status: string,
     note?: string,
+    pdf?: Buffer,
   ): Promise<void> {
     await this.send({
       to,
@@ -142,6 +152,7 @@ export class MailService {
         `<p>Statusul comenzii tale s-a schimbat în <strong>${status}</strong>.</p>
          ${note ? `<p>${note}</p>` : ''}`,
       ),
+      attachments: this.orderPdfAttachment(orderNo, pdf),
     });
   }
 

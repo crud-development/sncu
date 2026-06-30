@@ -134,7 +134,12 @@ export class PaymentsService {
         total: pending.amountTotal,
       });
       await this.mail
-        .sendInvoice(dto.email, `${invoice.series}-${invoice.number}`, invoice.total)
+        .sendInvoice(
+          dto.email,
+          `${invoice.series}-${invoice.number}`,
+          invoice.total,
+          invoice.pdf,
+        )
         .catch(() => undefined);
     } catch (err) {
       // La eșec, permite reluarea.
