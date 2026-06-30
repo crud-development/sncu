@@ -9,6 +9,7 @@ const clientLinks = [
   { to: '/puncte-lucru', label: 'Puncte de lucru', icon: 'pin' },
   { to: '/contracte', label: 'Contracte', icon: 'contract' },
   { to: '/comenzi', label: 'Comenzi', icon: 'order' },
+  { to: '/profil', label: 'Profil firmă', icon: 'building' },
 ];
 
 const adminLinks = [

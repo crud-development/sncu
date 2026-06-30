@@ -7,6 +7,7 @@ import { Inregistrare } from './pages/Inregistrare';
 import { Activare } from './pages/Activare';
 import { RecuperareParola, ResetParola } from './pages/ResetParola';
 import { Dashboard } from './pages/Dashboard';
+import { Profil } from './pages/Profil';
 import { PuncteLucru } from './pages/PuncteLucru';
 import { Comenzi } from './pages/Comenzi';
 import { Contracte } from './pages/Contracte';
@@ -39,6 +40,7 @@ export function App() {
         }
       >
         <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/profil" element={<Profil />} />
         <Route path="/puncte-lucru" element={<PuncteLucru />} />
         <Route path="/comenzi" element={<Comenzi />} />
         <Route path="/contracte" element={<Contracte />} />

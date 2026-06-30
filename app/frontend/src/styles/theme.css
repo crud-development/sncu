@@ -500,3 +500,5 @@ a.card:hover, .card--link:hover { transform: translateY(-3px); border-color: var
 .toast--info svg { color: var(--info); }
 @keyframes bsl-toast { from { opacity: 0; transform: translateX(18px); } to { opacity: 1; transform: none; } }
 @media (max-width: 560px) { .toast-stack { left: 12px; right: 12px; max-width: none; } }
+
+.input:disabled, .select:disabled { background: var(--surface-2); color: var(--ink-mute); cursor: not-allowed; }
