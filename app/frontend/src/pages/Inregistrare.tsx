@@ -2,10 +2,13 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Link } from 'react-router-dom';
 import { apiError } from '../lib/api';
+import { toast } from '../lib/toast';
 import { Logo } from '../components/Logo';
+import { Icon } from '../components/Icon';
 import { StripePayment } from '../components/StripePayment';
 import {
   createPaymentIntent,
+  lookupAnaf,
   mockConfirmPayment,
   type CreateIntentResult,
 } from '../lib/resources';
@@ -31,16 +34,39 @@ export function Inregistrare() {
   const [step, setStep] = useState<Step>('form');
   const [intent, setIntent] = useState<CreateIntentResult | null>(null);
   const [error, setError] = useState('');
+  const [anafLoading, setAnafLoading] = useState(false);
   const {
     register,
     handleSubmit,
     watch,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<Form>({ defaultValues: { workpoints: 1 } });
 
   const workpoints = Number(watch('workpoints')) || 1;
   const noVat = priceNoVat(workpoints);
   const total = noVat * (1 + PRICING.vatRate);
+
+  async function fetchAnaf() {
+    const cui = (watch('cui') || '').trim();
+    if (!cui) {
+      toast.error('Introdu CUI-ul firmei.');
+      return;
+    }
+    setAnafLoading(true);
+    try {
+      const d = await lookupAnaf(cui);
+      setValue('companyName', d.companyName, { shouldValidate: true });
+      setValue('address', d.address, { shouldValidate: true });
+      setValue('city', d.city, { shouldValidate: true });
+      if (d.judet) setValue('judet', d.judet, { shouldValidate: true });
+      toast.success('Date preluate de la ANAF.');
+    } catch (e) {
+      toast.error(apiError(e));
+    } finally {
+      setAnafLoading(false);
+    }
+  }
 
   async function onSubmit(values: Form) {
     setError('');
@@ -116,7 +142,30 @@ export function Inregistrare() {
             <div className="field"><label>Denumire firmă *</label>
               <input className="input" {...register('companyName', { required: true })} /></div>
             <div className="field"><label>CUI / CIF *</label>
-              <input className="input" {...register('cui', { required: true })} /></div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  className="input"
+                  placeholder="ex: RO12345678"
+                  {...register('cui', { required: true })}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') { e.preventDefault(); fetchAnaf(); }
+                  }}
+                />
+                <button
+                  type="button"
+                  className="btn btn--ghost"
+                  style={{ flex: 'none' }}
+                  disabled={anafLoading}
+                  onClick={fetchAnaf}
+                  title="Preia datele firmei de la ANAF"
+                >
+                  {anafLoading ? 'Se preia…' : <><Icon name="download" size={16} /> ANAF</>}
+                </button>
+              </div>
+              <span className="muted" style={{ fontSize: 12 }}>
+                Completează CUI-ul și apasă ANAF pentru a prelua automat datele firmei.
+              </span>
+            </div>
             <div className="field field--full"><label>Adresă sediu social *</label>
               <input className="input" {...register('address', { required: true })} /></div>
             <div className="field"><label>Oraș *</label>

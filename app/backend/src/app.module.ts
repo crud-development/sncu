@@ -15,6 +15,7 @@ import { OrdersModule } from './modules/orders/orders.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { InvoicingModule } from './modules/invoicing/invoicing.module';
+import { AnafModule } from './modules/anaf/anaf.module';
 
 @Module({
   imports: [
@@ -44,6 +45,7 @@ import { InvoicingModule } from './modules/invoicing/invoicing.module';
     AdminModule,
     InvoicingModule,
     PaymentsModule,
+    AnafModule,
   ],
   controllers: [HealthController],
 })

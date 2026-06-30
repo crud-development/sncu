@@ -133,6 +133,23 @@ export const downloadContractPdf = (id: string) =>
 export const downloadOrderPdf = (id: string) =>
   downloadPdf(`/api/orders/${id}/pdf`, `comanda-${id}.pdf`);
 
+/* ─────────── ANAF ─────────── */
+
+export interface AnafCompany {
+  cui: string;
+  companyName: string;
+  regCom: string;
+  address: string;
+  city: string;
+  judet: string;
+  codPostal: string;
+}
+
+export const lookupAnaf = (cui: string) =>
+  api
+    .get<AnafCompany>(`/anaf/${encodeURIComponent(cui.trim())}`)
+    .then((r) => r.data);
+
 /* ─────────── PLATĂ ─────────── */
 
 export interface CreateIntentResult {
