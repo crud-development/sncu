@@ -140,6 +140,11 @@ export class AdminContractsController {
     return { text: await this.contracts.renderTextById(id) };
   }
 
+  @Get(':id/html')
+  async html(@Param('id') id: string) {
+    return { html: await this.contracts.renderHtmlById(id) };
+  }
+
   @Post(':id/cancel')
   cancel(@Param('id') id: string) {
     return this.contracts.adminCancel(id);

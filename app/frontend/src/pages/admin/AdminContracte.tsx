@@ -2,10 +2,11 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Icon } from '../../components/Icon';
 import { Modal } from '../../components/Modal';
+import { DocFrame } from '../../components/DocFrame';
 import { TableSkeleton } from '../../components/Skeleton';
 import {
   adminCancelContract,
-  adminGetContractText,
+  adminGetContractHtml,
   adminListContracts,
   downloadAdminContractPdf,
   type AdminContract,
@@ -151,9 +152,9 @@ export function AdminContracte() {
 }
 
 function AdminContractView({ contract, onClose }: { contract: AdminContract; onClose: () => void }) {
-  const textQ = useQuery({
-    queryKey: ['admin-contract-text', contract.id],
-    queryFn: () => adminGetContractText(contract.id),
+  const htmlQ = useQuery({
+    queryKey: ['admin-contract-html', contract.id],
+    queryFn: () => adminGetContractHtml(contract.id),
   });
   return (
     <Modal title={contract.contractNo ? `Contract ${contract.contractNo}` : 'Contract (draft)'} onClose={onClose} wide>
@@ -163,9 +164,7 @@ function AdminContractView({ contract, onClose }: { contract: AdminContract; onC
         <span className="muted">Status: {contract.status}</span>
         <span className="muted">Expirare: {fmt(contract.expiresAt)}</span>
       </div>
-      <div className="contract-text">
-        {textQ.isLoading ? 'Se încarcă contractul…' : textQ.data}
-      </div>
+      <DocFrame html={htmlQ.data} height={520} />
       {contract.contractNo && (
         <button className="btn btn--ghost btn--block" style={{ marginTop: 16 }} onClick={() => downloadAdminContractPdf(contract.id)}>
           <Icon name="download" size={16} /> Descarcă PDF

@@ -53,6 +53,11 @@ export class ContractsController {
     return { text: await this.service.renderText(user.id, id) };
   }
 
+  @Get(':id/html')
+  async html(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return { html: await this.service.renderHtml(user.id, id) };
+  }
+
   @Post(':id/sign')
   sign(
     @CurrentUser() user: AuthUser,

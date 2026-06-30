@@ -20,10 +20,12 @@ import {
 import {
   DEFAULT_CONTRACT_TEMPLATE,
   renderContract,
+  renderDriveHtml,
   renderDriveTemplate,
 } from './contract-template';
-import { fetchGoogleDocText } from './google-docs';
+import { fetchGoogleDocHtml, fetchGoogleDocText } from './google-docs';
 import { buildContractPdf } from './contract-pdf';
+import { HtmlPdfService } from '../pdf/html-pdf.service';
 
 @Injectable()
 export class ContractsService {
@@ -35,6 +37,7 @@ export class ContractsService {
     private readonly settings: SettingsService,
     private readonly mail: MailService,
     private readonly config: ConfigService,
+    private readonly htmlPdf: HtmlPdfService,
   ) {}
 
   list(clientId: string): Promise<ContractDocument[]> {
@@ -227,6 +230,37 @@ export class ContractsService {
     return renderContract(DEFAULT_CONTRACT_TEMPLATE, contract);
   }
 
+  /** HTML formatat din template-ul Google Docs (sau null dacă nu e disponibil). */
+  private async renderDocHtml(contract: ContractDocument): Promise<string | null> {
+    const settings = await this.settings.get();
+    if (settings.contractTemplateText?.trim()) return null; // override text → fără HTML
+    if (settings.contractTemplateUrl) {
+      const html = await fetchGoogleDocHtml(settings.contractTemplateUrl);
+      if (html) return renderDriveHtml(html, contract, contract.signatureDataUrl);
+    }
+    return null;
+  }
+
+  /** Învelește textul simplu într-un HTML minimal (fallback pentru afișare). */
+  private textAsHtml(text: string): string {
+    const esc = text.replace(/[&<>]/g, (c) =>
+      c === '&' ? '&amp;' : c === '<' ? '&lt;' : '&gt;',
+    );
+    return `<!doctype html><meta charset="utf-8"><div style="font-family:Inter,Arial,sans-serif;white-space:pre-wrap;font-size:13.5px;line-height:1.65;color:#102a1d;padding:8px 4px">${esc}</div>`;
+  }
+
+  /** HTML pentru afișarea contractului (client). */
+  async renderHtml(clientId: string, id: string): Promise<string> {
+    const contract = await this.getOwned(clientId, id);
+    return (await this.renderDocHtml(contract)) ?? this.textAsHtml(await this.renderDoc(contract));
+  }
+
+  /** HTML pentru afișarea contractului (admin, orice contract). */
+  async renderHtmlById(id: string): Promise<string> {
+    const contract = await this.getAnyOrFail(id);
+    return (await this.renderDocHtml(contract)) ?? this.textAsHtml(await this.renderDoc(contract));
+  }
+
   /** Statusul efectiv: un contract Semnat expirat se afișează ca Expirat. */
   static effectiveStatus(c: ContractDocument): ContractStatus {
     if (
@@ -258,8 +292,14 @@ export class ContractsService {
   async pdfByDoc(
     contract: ContractDocument,
   ): Promise<{ buffer: Buffer; filename: string }> {
-    const text = await this.renderDoc(contract);
-    const buffer = await buildContractPdf(text, contract);
+    // Preferă template-ul HTML (formatat) randat prin Chromium; fallback la pdfkit.
+    let buffer: Buffer;
+    const html = await this.renderDocHtml(contract);
+    if (html) {
+      buffer = await this.htmlPdf.toPdf(html);
+    } else {
+      buffer = await buildContractPdf(await this.renderDoc(contract), contract);
+    }
     const safeCompany = contract.snapshot.company.companyName.replace(
       /[^a-zA-Z0-9]+/g,
       '_',

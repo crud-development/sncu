@@ -14,8 +14,9 @@ import { MailService } from '../mail/mail.service';
 import { CreateOrderDto } from './dto/order.dto';
 import { Order, OrderDocument, OrderStatus } from './schemas/order.schema';
 import { buildOrderPdf, buildOrderPdfFromTemplate } from './order-pdf';
-import { renderOrderDriveTemplate } from './order-template';
-import { fetchGoogleDocText } from '../contracts/google-docs';
+import { renderOrderDriveHtml, renderOrderDriveTemplate } from './order-template';
+import { fetchGoogleDocHtml, fetchGoogleDocText } from '../contracts/google-docs';
+import { HtmlPdfService } from '../pdf/html-pdf.service';
 
 /** Tranziții permise de status (US-07). */
 const TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
@@ -34,6 +35,7 @@ export class OrdersService {
     private readonly contracts: ContractsService,
     private readonly settings: SettingsService,
     private readonly mail: MailService,
+    private readonly htmlPdf: HtmlPdfService,
   ) {}
 
   list(clientId: string): Promise<OrderDocument[]> {
@@ -186,18 +188,24 @@ export class OrdersService {
   private async renderOrderPdf(order: OrderDocument): Promise<Buffer> {
     const settings = await this.settings.get();
     if (settings.orderTemplateUrl) {
+      const client = await this.clients.findById(order.clientId.toString());
+      const extra = {
+        regCom: client?.regCom ?? '',
+        judet: client?.judet ?? '',
+        localitate: client?.city ?? '',
+        adminCI: [client?.adminIdSeries, client?.adminIdNumber]
+          .filter(Boolean)
+          .join(' '),
+      };
+      // Preferă HTML formatat (randat prin Chromium); fallback la text/pdfkit.
+      const html = await fetchGoogleDocHtml(settings.orderTemplateUrl);
+      if (html) {
+        return this.htmlPdf.toPdf(renderOrderDriveHtml(html, order, extra));
+      }
       const docText = await fetchGoogleDocText(settings.orderTemplateUrl);
       if (docText) {
-        const client = await this.clients.findById(order.clientId.toString());
         return buildOrderPdfFromTemplate(
-          renderOrderDriveTemplate(docText, order, {
-            regCom: client?.regCom ?? '',
-            judet: client?.judet ?? '',
-            localitate: client?.city ?? '',
-            adminCI: [client?.adminIdSeries, client?.adminIdNumber]
-              .filter(Boolean)
-              .join(' '),
-          }),
+          renderOrderDriveTemplate(docText, order, extra),
         );
       }
     }

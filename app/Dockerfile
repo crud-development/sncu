@@ -21,6 +21,13 @@ FROM node:22-alpine AS runtime
 ENV NODE_ENV=production
 WORKDIR /app/backend
 
+# Chromium pentru randarea HTML→PDF a documentelor (puppeteer-core).
+RUN apk add --no-cache \
+      chromium nss freetype freetype-dev harfbuzz ca-certificates ttf-freefont
+ENV CHROMIUM_PATH=/usr/bin/chromium-browser
+# puppeteer-core nu descarcă niciodată Chromium, dar setăm flag-ul ca măsură.
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+
 # Doar dependențele de producție.
 COPY backend/package*.json ./
 RUN npm install --omit=dev && npm cache clean --force

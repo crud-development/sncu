@@ -65,18 +65,22 @@ function fmtDate(d?: Date): string {
   return d ? new Date(d).toLocaleDateString('ro-RO') : '__________';
 }
 
-/**
- * Randează template-ul din Google Docs (placeholdere `<...>`) cu datele contractului.
- * Mapping pentru template-ul oficial BioEcoLab.
- */
-export function renderDriveTemplate(text: string, contract: ContractDocument): string {
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+/** Valorile pentru placeholderele template-ului oficial BioEcoLab. */
+function contractValues(contract: ContractDocument): Record<string, string> {
   const s = contract.snapshot;
   const date = fmtDate(contract.signedAt ?? (contract as any).createdAt);
   const activities = s.workpoints.map((w) => w.tipActivitate).filter(Boolean).join(', ');
   const sanitary = s.workpoints.map((w) => w.sanitaryAuthNumber).filter(Boolean).join(', ');
   const wpAddresses = s.workpoints.map((w) => w.address).filter(Boolean).join('; ');
 
-  const map: Record<string, string> = {
+  return {
     SERIE: contract.series ?? '',
     serie: contract.series ?? '',
     numar: contract.number != null ? String(contract.number) : '',
@@ -100,15 +104,42 @@ export function renderDriveTemplate(text: string, contract: ContractDocument): s
     'aut sanitar veterinara': sanitary,
     'punct de lucru': wpAddresses,
     pret: '330 lei + TVA',
-    semnatura: '(semnătură electronică — vezi mai jos)',
     caen: '',
     'data start aut': '',
     'data stop aut': '',
   };
+}
 
+/** Randează template-ul din Google Docs ca TEXT (placeholdere `<...>`). */
+export function renderDriveTemplate(text: string, contract: ContractDocument): string {
+  const map = { ...contractValues(contract), semnatura: '(semnătură electronică — vezi mai jos)' };
   return text.replace(/<([^<>]{1,40})>/g, (full, key) =>
     Object.prototype.hasOwnProperty.call(map, key) ? map[key] : full,
   );
+}
+
+/**
+ * Randează template-ul HTML din Google Docs (placeholdere `&lt;...&gt;`) cu datele
+ * contractului. Semnătura electronică (PNG data URL) e încorporată ca imagine.
+ */
+export function renderDriveHtml(
+  html: string,
+  contract: ContractDocument,
+  signatureDataUrl?: string,
+): string {
+  const values = contractValues(contract);
+  const sig = signatureDataUrl
+    ? `<img src="${signatureDataUrl}" style="height:80px" alt="semnătură" />`
+    : '________________';
+
+  const replace = (key: string): string | null => {
+    if (key === 'semnatura') return sig;
+    if (Object.prototype.hasOwnProperty.call(values, key)) return escapeHtml(values[key]);
+    return null;
+  };
+
+  // În export-ul HTML, placeholderele apar mereu escapate: &lt;key&gt;.
+  return html.replace(/&lt;([^&]{1,40})&gt;/g, (full, key) => replace(key) ?? full);
 }
 
 /** Înlocuiește placeholderele din template cu datele contractului. */

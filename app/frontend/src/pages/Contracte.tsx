@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiError } from '../lib/api';
 import { Modal } from '../components/Modal';
 import { Icon } from '../components/Icon';
+import { DocFrame } from '../components/DocFrame';
 import { TableSkeleton } from '../components/Skeleton';
 import { SignaturePad } from '../components/SignaturePad';
 import {
@@ -11,7 +12,7 @@ import {
   deleteContract,
   downloadContractPdf,
   editContract,
-  getContractText,
+  getContractHtml,
   listContracts,
   listWorkpoints,
   signContract,
@@ -156,9 +157,9 @@ export function Contracte() {
 
 /* ─── Vizualizare contract (read-only) ─── */
 function ViewModal({ contract, onClose }: { contract: Contract; onClose: () => void }) {
-  const textQ = useQuery({
-    queryKey: ['contract-text', contract._id],
-    queryFn: () => getContractText(contract._id),
+  const htmlQ = useQuery({
+    queryKey: ['contract-html', contract._id],
+    queryFn: () => getContractHtml(contract._id),
   });
   return (
     <Modal title={contract.contractNo ? `Contract ${contract.contractNo}` : 'Contract (draft)'} onClose={onClose} wide>
@@ -168,9 +169,7 @@ function ViewModal({ contract, onClose }: { contract: Contract; onClose: () => v
         <span className="muted">Expirare: {fmt(contract.expiresAt)}</span>
         <span className="muted">Puncte de lucru: {contract.snapshot.workpoints.length}</span>
       </div>
-      <div className="contract-text">
-        {textQ.isLoading ? 'Se încarcă contractul…' : textQ.data}
-      </div>
+      <DocFrame html={htmlQ.data} height={520} />
       {(contract.status === 'Semnat' || contract.status === 'Expirat') && (
         <button className="btn btn--ghost btn--block" style={{ marginTop: 16 }} onClick={() => downloadContractPdf(contract._id)}>
           <Icon name="download" size={16} /> Descarcă PDF
@@ -238,9 +237,9 @@ function SignModal({
   onClose: () => void;
   onSigned: () => void;
 }) {
-  const textQ = useQuery({
-    queryKey: ['contract-text', contract._id],
-    queryFn: () => getContractText(contract._id),
+  const htmlQ = useQuery({
+    queryKey: ['contract-html', contract._id],
+    queryFn: () => getContractHtml(contract._id),
   });
   const [signature, setSignature] = useState<string | null>(null);
   const [error, setError] = useState('');
@@ -256,9 +255,7 @@ function SignModal({
     <Modal title="Citește & semnează contractul" onClose={onClose} wide>
       {error && <div className="alert alert--error">{error}</div>}
 
-      <div className="contract-text">
-        {textQ.isLoading ? 'Se încarcă contractul…' : textQ.data}
-      </div>
+      <DocFrame html={htmlQ.data} height={460} />
 
       <p style={{ margin: '20px 0 10px', fontWeight: 600 }}>Semnătură electronică</p>
       <SignaturePad onChange={setSignature} />

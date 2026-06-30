@@ -1,6 +1,7 @@
 import axios from 'axios';
 
 const cache = new Map<string, { text: string; at: number }>();
+const htmlCache = new Map<string, { html: string; at: number }>();
 const TTL = 10 * 60 * 1000; // 10 minute
 
 /** Extrage ID-ul documentului dintr-un URL Google Docs. */
@@ -34,3 +35,30 @@ export async function fetchGoogleDocText(url: string): Promise<string | null> {
     return null;
   }
 }
+
+/**
+ * Preia conținutul HTML al unui Google Doc public (export ca .html, păstrează
+ * formatarea). Returnează null dacă nu e accesibil.
+ */
+export async function fetchGoogleDocHtml(url: string): Promise<string | null> {
+  const id = extractDocId(url);
+  if (!id) return null;
+
+  const cached = htmlCache.get(id);
+  if (cached && Date.now() - cached.at < TTL) return cached.html;
+
+  try {
+    const res = await axios.get(
+      `https://docs.google.com/document/d/${id}/export?format=html`,
+      { timeout: 12000, responseType: 'text' },
+    );
+    const html = String(res.data ?? '');
+    // Pagina de login (doc nepublic) nu conține clasa doc-content.
+    if (!html || !/doc-content|<body/i.test(html)) return null;
+    htmlCache.set(id, { html, at: Date.now() });
+    return html;
+  } catch {
+    return null;
+  }
+}
+
