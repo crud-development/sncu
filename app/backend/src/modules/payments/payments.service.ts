@@ -43,10 +43,20 @@ export class PaymentsService {
     return !this.stripe;
   }
 
-  config_(): { publishableKey: string; mock: boolean } {
+  config_(): {
+    publishableKey: string;
+    mock: boolean;
+    pricing: {
+      base: number;
+      extraWorkpoint: number;
+      includedWorkpoints: number;
+      vatRate: number;
+    };
+  } {
     return {
       publishableKey: this.config.get<string>('stripe.publishableKey') ?? '',
       mock: this.isMock,
+      pricing: this.config.get('pricing')!,
     };
   }
 

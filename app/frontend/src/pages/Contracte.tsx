@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiError } from '../lib/api';
+import { toast } from '../lib/toast';
 import { Modal } from '../components/Modal';
 import { Icon } from '../components/Icon';
 import { DocFrame } from '../components/DocFrame';
@@ -32,12 +33,26 @@ function fmt(d?: string) {
   return d ? new Date(d).toLocaleDateString('ro-RO') : '—';
 }
 
+async function handleDownloadPdf(id: string, setDownloading: (id: string | null) => void) {
+  setDownloading(id);
+  toast.info('Descărcarea este în curs, te rugăm să aștepți…');
+  try {
+    await downloadContractPdf(id);
+    toast.success('PDF descărcat.');
+  } catch (e) {
+    toast.error(apiError(e));
+  } finally {
+    setDownloading(null);
+  }
+}
+
 export function Contracte() {
   const qc = useQueryClient();
   const { data, isLoading } = useQuery({ queryKey: ['contracts'], queryFn: listContracts });
   const [signing, setSigning] = useState<Contract | null>(null);
   const [viewing, setViewing] = useState<Contract | null>(null);
   const [editing, setEditing] = useState<Contract | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['contracts'] });
@@ -121,7 +136,12 @@ export function Contracte() {
                             <Icon name="eye" size={16} />
                           </button>
                           {(c.status === 'Semnat' || c.status === 'Expirat') && (
-                            <button className="icon-btn" title="Descarcă PDF" onClick={() => downloadContractPdf(c._id)}>
+                            <button
+                              className="icon-btn"
+                              title="Descarcă PDF"
+                              disabled={downloadingId === c._id}
+                              onClick={() => handleDownloadPdf(c._id, setDownloadingId)}
+                            >
                               <Icon name="download" size={16} />
                             </button>
                           )}
@@ -161,6 +181,21 @@ function ViewModal({ contract, onClose }: { contract: Contract; onClose: () => v
     queryKey: ['contract-html', contract._id],
     queryFn: () => getContractHtml(contract._id),
   });
+  const [downloading, setDownloading] = useState(false);
+
+  async function onDownload() {
+    setDownloading(true);
+    toast.info('Descărcarea este în curs, te rugăm să aștepți…');
+    try {
+      await downloadContractPdf(contract._id);
+      toast.success('PDF descărcat.');
+    } catch (e) {
+      toast.error(apiError(e));
+    } finally {
+      setDownloading(false);
+    }
+  }
+
   return (
     <Modal title={contract.contractNo ? `Contract ${contract.contractNo}` : 'Contract (draft)'} onClose={onClose} wide>
       <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', marginBottom: 16, fontSize: 13 }}>
@@ -171,8 +206,13 @@ function ViewModal({ contract, onClose }: { contract: Contract; onClose: () => v
       </div>
       <DocFrame html={htmlQ.data} height={520} />
       {(contract.status === 'Semnat' || contract.status === 'Expirat') && (
-        <button className="btn btn--ghost btn--block" style={{ marginTop: 16 }} onClick={() => downloadContractPdf(contract._id)}>
-          <Icon name="download" size={16} /> Descarcă PDF
+        <button
+          className="btn btn--ghost btn--block"
+          style={{ marginTop: 16 }}
+          disabled={downloading}
+          onClick={onDownload}
+        >
+          <Icon name="download" size={16} /> {downloading ? 'Se descarcă…' : 'Descarcă PDF'}
         </button>
       )}
     </Modal>

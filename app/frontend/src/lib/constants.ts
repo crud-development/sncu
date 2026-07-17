@@ -65,18 +65,18 @@ export const TIP_AMBALARE = ['Saci Plastic', 'Vrac', 'Recipient plastic'];
 
 export const ORDER_STATUS = ['Plasată', 'Confirmată', 'Onorată', 'Anulată'];
 
-// Prețuri (lei, fără TVA) — trebuie să corespundă config-ului backend.
-export const PRICING = {
-  base: 330,
-  extraWorkpoint: 49.49,
-  includedWorkpoints: 3,
-  vatRate: 0.19,
-};
+/** Prețuri din env (PRICE_*, VAT_RATE) — expuse de GET /payments/config. */
+export interface Pricing {
+  base: number;
+  extraWorkpoint: number;
+  includedWorkpoints: number;
+  vatRate: number;
+}
 
 /** Preț fără TVA pentru un număr dat de puncte de lucru. */
-export function priceNoVat(workpoints: number): number {
-  const extra = Math.max(0, workpoints - PRICING.includedWorkpoints);
-  return PRICING.base + extra * PRICING.extraWorkpoint;
+export function priceNoVat(workpoints: number, pricing: Pricing): number {
+  const extra = Math.max(0, workpoints - pricing.includedWorkpoints);
+  return pricing.base + extra * pricing.extraWorkpoint;
 }
 
 export function formatLei(value: number): string {

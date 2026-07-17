@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { apiError } from '../lib/api';
 import { toast } from '../lib/toast';
 import { Logo } from '../components/Logo';
@@ -8,11 +9,12 @@ import { Icon } from '../components/Icon';
 import { StripePayment } from '../components/StripePayment';
 import {
   createPaymentIntent,
+  getPaymentConfig,
   lookupAnaf,
   mockConfirmPayment,
   type CreateIntentResult,
 } from '../lib/resources';
-import { JUDETE, TIP_ACTIVITATE, priceNoVat, formatLei, PRICING } from '../lib/constants';
+import { JUDETE, TIP_ACTIVITATE, priceNoVat, formatLei } from '../lib/constants';
 
 interface Form {
   contactPerson: string;
@@ -26,6 +28,7 @@ interface Form {
   tipActivitate: string;
   ansvsaAuthorization?: string;
   workpoints: number;
+  acceptTerms: boolean;
 }
 
 type Step = 'form' | 'pay' | 'done';
@@ -35,17 +38,22 @@ export function Inregistrare() {
   const [intent, setIntent] = useState<CreateIntentResult | null>(null);
   const [error, setError] = useState('');
   const [anafLoading, setAnafLoading] = useState(false);
+  const { data: paymentConfig } = useQuery({
+    queryKey: ['payment-config'],
+    queryFn: getPaymentConfig,
+  });
   const {
     register,
     handleSubmit,
     watch,
     setValue,
     formState: { errors, isSubmitting },
-  } = useForm<Form>({ defaultValues: { workpoints: 1 } });
+  } = useForm<Form>({ defaultValues: { workpoints: 1, acceptTerms: false } });
 
   const workpoints = Number(watch('workpoints')) || 1;
-  const noVat = priceNoVat(workpoints);
-  const total = noVat * (1 + PRICING.vatRate);
+  const pricing = paymentConfig?.pricing;
+  const noVat = pricing ? priceNoVat(workpoints, pricing) : 0;
+  const total = pricing ? noVat * (1 + pricing.vatRate) : 0;
 
   async function fetchAnaf() {
     const cui = (watch('cui') || '').trim();
@@ -71,7 +79,8 @@ export function Inregistrare() {
   async function onSubmit(values: Form) {
     setError('');
     try {
-      const res = await createPaymentIntent({ ...values, workpoints: Number(values.workpoints) });
+      const { acceptTerms: _, ...payload } = values;
+      const res = await createPaymentIntent({ ...payload, workpoints: Number(payload.workpoints) });
       setIntent(res);
       setStep('pay');
     } catch (err) {
@@ -139,9 +148,7 @@ export function Inregistrare() {
 
           <h3 style={{ margin: '18px 0 14px', fontSize: 15 }}>Date firmă</h3>
           <div className="form-grid">
-            <div className="field"><label>Denumire firmă *</label>
-              <input className="input" {...register('companyName', { required: true })} /></div>
-            <div className="field"><label>CUI / CIF *</label>
+          <div className="field"><label>CUI / CIF *</label>
               <div style={{ display: 'flex', gap: 8 }}>
                 <input
                   className="input"
@@ -166,6 +173,9 @@ export function Inregistrare() {
                 Completează CUI-ul și apasă ANAF pentru a prelua automat datele firmei.
               </span>
             </div>
+            <div className="field"><label>Denumire firmă *</label>
+              <input className="input" {...register('companyName', { required: true })} /></div>
+         
             <div className="field field--full"><label>Adresă sediu social *</label>
               <input className="input" {...register('address', { required: true })} /></div>
             <div className="field"><label>Oraș *</label>
@@ -187,12 +197,37 @@ export function Inregistrare() {
           </div>
 
           <div className="alert alert--success" style={{ marginTop: 8 }}>
-            <strong>Rezumat:</strong> {workpoints} {workpoints === 1 ? 'punct' : 'puncte'} de lucru ·{' '}
-            {formatLei(noVat)} + TVA · <strong>Total {formatLei(total)}</strong> / an
-            {errors.workpoints && ' — număr invalid'}
+            <strong>Rezumat:</strong>{' '}
+            {pricing ? (
+              <>
+                {workpoints} {workpoints === 1 ? 'punct' : 'puncte'} de lucru ·{' '}
+                {formatLei(noVat)} + TVA · <strong>Total {formatLei(total)}</strong> / an
+                {errors.workpoints && ' — număr invalid'}
+              </>
+            ) : (
+              'Se încarcă prețurile…'
+            )}
           </div>
 
-          <button className="btn btn--primary btn--block" disabled={isSubmitting}>
+          <div className="field" style={{ marginTop: 4 }}>
+            <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer', fontWeight: 500 }}>
+              <input
+                type="checkbox"
+                style={{ marginTop: 3, flexShrink: 0 }}
+                {...register('acceptTerms', {
+                  required: 'Trebuie să fii de acord cu termenii și condițiile.',
+                })}
+              />
+              <span>
+                Sunt de acord cu termenii și condițiile și crearea abonamentului *
+              </span>
+            </label>
+            {errors.acceptTerms && (
+              <span className="field__error">{errors.acceptTerms.message}</span>
+            )}
+          </div>
+
+          <button className="btn btn--primary btn--block" disabled={isSubmitting || !pricing}>
             {isSubmitting ? 'Se procesează…' : 'Continuă spre plată'}
           </button>
         </form>

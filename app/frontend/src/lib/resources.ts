@@ -1,4 +1,7 @@
 import { api, getToken } from './api';
+import type { Pricing } from './constants';
+
+export type { Pricing };
 
 export interface Profile {
   id: string;
@@ -161,6 +164,12 @@ export const lookupAnaf = (cui: string) =>
 
 /* ─────────── PLATĂ ─────────── */
 
+export interface PaymentConfig {
+  publishableKey: string;
+  mock: boolean;
+  pricing: Pricing;
+}
+
 export interface CreateIntentResult {
   clientSecret: string;
   paymentIntentId: string;
@@ -169,6 +178,8 @@ export interface CreateIntentResult {
   amount: number;
 }
 
+export const getPaymentConfig = () =>
+  api.get<PaymentConfig>('/payments/config').then((r) => r.data);
 export const createPaymentIntent = (data: Record<string, unknown>) =>
   api.post<CreateIntentResult>('/payments/create-intent', data).then((r) => r.data);
 export const mockConfirmPayment = (paymentIntentId: string) =>
