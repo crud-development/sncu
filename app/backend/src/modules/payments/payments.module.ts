@@ -7,6 +7,7 @@ import {
   PendingRegistration,
   PendingRegistrationSchema,
 } from './schemas/pending-registration.schema';
+import { Payment, PaymentSchema } from './schemas/payment.schema';
 import { PaymentsService } from './payments.service';
 import { PaymentsController } from './payments.controller';
 
@@ -14,6 +15,7 @@ import { PaymentsController } from './payments.controller';
   imports: [
     MongooseModule.forFeature([
       { name: PendingRegistration.name, schema: PendingRegistrationSchema },
+      { name: Payment.name, schema: PaymentSchema },
     ]),
     ClientsModule,
     AuthModule,
@@ -21,5 +23,6 @@ import { PaymentsController } from './payments.controller';
   ],
   controllers: [PaymentsController],
   providers: [PaymentsService],
+  exports: [PaymentsService],
 })
 export class PaymentsModule {}

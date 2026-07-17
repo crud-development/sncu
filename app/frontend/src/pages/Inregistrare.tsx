@@ -27,7 +27,6 @@ interface Form {
   judet: string;
   tipActivitate: string;
   ansvsaAuthorization?: string;
-  workpoints: number;
   acceptTerms: boolean;
 }
 
@@ -48,11 +47,10 @@ export function Inregistrare() {
     watch,
     setValue,
     formState: { errors, isSubmitting },
-  } = useForm<Form>({ defaultValues: { workpoints: 1, acceptTerms: false } });
+  } = useForm<Form>({ defaultValues: { acceptTerms: false } });
 
-  const workpoints = Number(watch('workpoints')) || 1;
   const pricing = paymentConfig?.pricing;
-  const noVat = pricing ? priceNoVat(workpoints, pricing) : 0;
+  const noVat = pricing ? priceNoVat(pricing) : 0;
   const total = pricing ? noVat * (1 + pricing.vatRate) : 0;
 
   async function fetchAnaf() {
@@ -80,7 +78,7 @@ export function Inregistrare() {
     setError('');
     try {
       const { acceptTerms: _, ...payload } = values;
-      const res = await createPaymentIntent({ ...payload, workpoints: Number(payload.workpoints) });
+      const res = await createPaymentIntent(payload);
       setIntent(res);
       setStep('pay');
     } catch (err) {
@@ -192,17 +190,14 @@ export function Inregistrare() {
               </select></div>
             <div className="field"><label>Autorizație ANSVSA</label>
               <input className="input" {...register('ansvsaAuthorization')} /></div>
-            <div className="field"><label>Număr puncte de lucru</label>
-              <input className="input" type="number" min={1} {...register('workpoints', { min: 1 })} /></div>
           </div>
 
           <div className="alert alert--success" style={{ marginTop: 8 }}>
             <strong>Rezumat:</strong>{' '}
             {pricing ? (
               <>
-                {workpoints} {workpoints === 1 ? 'punct' : 'puncte'} de lucru ·{' '}
-                {formatLei(noVat)} + TVA · <strong>Total {formatLei(total)}</strong> / an
-                {errors.workpoints && ' — număr invalid'}
+                Cont anual · {formatLei(noVat)} + TVA ·{' '}
+                <strong>Total {formatLei(total)}</strong> / an
               </>
             ) : (
               'Se încarcă prețurile…'

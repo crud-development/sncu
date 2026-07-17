@@ -44,6 +44,7 @@ export function Comenzi() {
 
   const [formOpen, setFormOpen] = useState(false);
   const [filters, setFilters] = useState({ from: '', to: '', workpoint: '', status: '' });
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   const workpoints = wpQ.data ?? [];
   const wpName = useMemo(() => {
@@ -62,6 +63,21 @@ export function Comenzi() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['orders'] }),
   });
 
+  async function handleDownload(id: string) {
+    setDownloadingId(id);
+    const loadingId = toast.loading('Se descarcă comanda, te rugăm să aștepți…');
+    try {
+      await downloadOrderPdf(id);
+      toast.dismiss(loadingId);
+      toast.success('Comanda a fost descărcată.');
+    } catch (e) {
+      toast.dismiss(loadingId);
+      toast.error(apiError(e));
+    } finally {
+      setDownloadingId(null);
+    }
+  }
+
   const orders = ordersQ.data ?? [];
   const filtered = orders.filter((o) => {
     if (filters.workpoint && o.workpointId !== filters.workpoint) return false;
@@ -72,13 +88,19 @@ export function Comenzi() {
   });
 
   function exportCsv() {
-    const head = ['Nr comandă', 'Punct lucru', 'Tip SNCU', 'Cantitate (kg)', 'Dată plasare', 'Status'];
+    const head = [
+      'Nr comandă', 'Punct lucru', 'Telefon', 'Data plasare',
+      'Denumire deșeu', 'Origine deșeu', 'Tip SNCU', 'Cantitate (kg)', 'Status',
+    ];
     const rows = filtered.map((o) => [
       o.orderNo,
       wpName.get(o.workpointId) ?? '',
+      o.contactPhone || '',
+      fmt(o.createdAt),
+      o.wasteName || '',
+      o.origin || '',
       o.sncuCategory,
       o.estimatedQuantityKg,
-      fmt(o.createdAt),
       o.status,
     ]);
     const csv = [head, ...rows]
@@ -94,7 +116,7 @@ export function Comenzi() {
   }
 
   if (ordersQ.isLoading || wpQ.isLoading) {
-    return <TableSkeleton cols={7} />;
+    return <TableSkeleton cols={10} />;
   }
 
   return (
@@ -158,9 +180,12 @@ export function Comenzi() {
               <tr>
                 <th>Nr. comandă</th>
                 <th>Punct lucru</th>
+                <th>Telefon</th>
+                <th>Data plasare</th>
+                <th>Denumire deșeu</th>
+                <th>Origine deșeu</th>
                 <th>Tip SNCU</th>
                 <th>Cantitate</th>
-                <th>Dată plasare</th>
                 <th>Status</th>
                 <th></th>
               </tr>
@@ -170,13 +195,20 @@ export function Comenzi() {
                 <tr key={o._id}>
                   <td>{o.orderNo}</td>
                   <td>{wpName.get(o.workpointId) ?? '—'}</td>
+                  <td>{o.contactPhone || '—'}</td>
+                  <td>{fmt(o.createdAt)}</td>
+                  <td>{o.wasteName || '—'}</td>
+                  <td>{o.origin || '—'}</td>
                   <td>{o.sncuCategory}</td>
                   <td>{o.estimatedQuantityKg} kg</td>
-                  <td>{fmt(o.createdAt)}</td>
                   <td><span className={`badge ${STATUS_CLASS[o.status]}`}>{o.status}</span></td>
                   <td style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>
-                    <button className="btn btn--ghost btn--sm" onClick={() => downloadOrderPdf(o._id)}>
-                      PDF
+                    <button
+                      className="btn btn--ghost btn--sm"
+                      disabled={downloadingId === o._id}
+                      onClick={() => handleDownload(o._id)}
+                    >
+                      {downloadingId === o._id ? 'Se descarcă…' : 'PDF'}
                     </button>{' '}
                     {o.status === 'Plasată' && (
                       <button className="btn btn--danger btn--sm"
@@ -216,8 +248,10 @@ function OrderForm({
   onSaved: () => void;
 }) {
   const [error, setError] = useState('');
-  const { register, handleSubmit, setValue, formState: { isSubmitting } } =
+  const { register, handleSubmit, setValue, watch, formState: { isSubmitting } } =
     useForm<any>();
+  const origin = watch('origin');
+  const sncuRequired = origin === 'Animala';
 
   // Prefill din punctul de lucru selectat.
   function onWpChange(id: string) {
@@ -236,6 +270,7 @@ function OrderForm({
     try {
       await createOrder({
         ...values,
+        sncuCategory: values.origin === 'Animala' ? values.sncuCategory : (values.sncuCategory || undefined),
         estimatedQuantityKg: Number(values.estimatedQuantityKg),
         accountingValue: values.accountingValue ? Number(values.accountingValue) : undefined,
       });
@@ -273,14 +308,25 @@ function OrderForm({
           </div>
           <div className="field">
             <label>Origine *</label>
-            <select className="select" {...register('origin', { required: true })}>
+            <select
+              className="select"
+              {...register('origin', {
+                required: true,
+                onChange: (e) => {
+                  if (e.target.value !== 'Animala') setValue('sncuCategory', '');
+                },
+              })}
+            >
               <option value="">Alege…</option>
               {ORIGINE_PRODUS.map((o) => <option key={o} value={o}>{o}</option>)}
             </select>
           </div>
           <div className="field">
-            <label>Categorie SNCU *</label>
-            <select className="select" {...register('sncuCategory', { required: true })}>
+            <label>Categorie SNCU{sncuRequired ? ' *' : ''}</label>
+            <select
+              className="select"
+              {...register('sncuCategory', { required: sncuRequired })}
+            >
               <option value="">Alege…</option>
               {CATEGORII_SNCU.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>

@@ -31,12 +31,6 @@ export class WorkpointsService {
     dto: CreateWorkpointDto,
   ): Promise<WorkpointDocument> {
     const client = await this.clients.getOrFail(clientId);
-    const existing = await this.count(clientId);
-    if (existing >= client.workpointsAllowed) {
-      throw new BadRequestException(
-        `Ai atins numărul maxim de puncte de lucru (${client.workpointsAllowed}). Contactează-ne pentru a adăuga puncte suplimentare.`,
-      );
-    }
 
     // Precompletare contact din cont dacă lipsește.
     const contactPerson =

@@ -31,7 +31,6 @@ export class AdminCreateClientDto {
   @IsEmail() email: string;
   @IsString() phone: string;
   @IsDateString() contractExpiresAt: string;
-  @IsOptional() @IsInt() @Min(1) workpoints?: number;
 }
 
 /** 4.2.1 — editarea unei comenzi din admin (toate câmpurile opționale). */
@@ -65,6 +64,15 @@ export class UpdateOrderStatusDto {
 
 export class SetOrderCostDto {
   @Type(() => Number) @IsNumber() @Min(0) estimatedCost: number;
+}
+
+/** Prelungire manuală contract — plată OP. */
+export class ExtendContractDto {
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @IsIn([1, 2, 3])
+  periodYears: number;
 }
 
 export class UpdateSettingsDto {

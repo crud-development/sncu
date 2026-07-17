@@ -17,6 +17,7 @@ import { buildOrderPdf, buildOrderPdfFromTemplate } from './order-pdf';
 import { renderOrderDriveHtml, renderOrderDriveTemplate } from './order-template';
 import { fetchGoogleDocHtml, fetchGoogleDocText } from '../contracts/google-docs';
 import { HtmlPdfService } from '../pdf/html-pdf.service';
+import { ContractStatus } from '../contracts/schemas/contract.schema';
 
 /** Tranziții permise de status (US-07). */
 const TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
@@ -189,6 +190,16 @@ export class OrdersService {
     const settings = await this.settings.get();
     if (settings.orderTemplateUrl) {
       const client = await this.clients.findById(order.clientId.toString());
+      const contracts = await this.contracts.list(order.clientId.toString());
+      const contract = contracts.find((c) => {
+        const s = ContractsService.effectiveStatus(c);
+        return (
+          s === ContractStatus.SEMNAT || s === ContractStatus.EXPIRAT
+        );
+      });
+      const contractDate = contract
+        ? (contract.signedAt ?? (contract as any).createdAt)
+        : undefined;
       const extra = {
         regCom: client?.regCom ?? '',
         judet: client?.judet ?? '',
@@ -196,6 +207,15 @@ export class OrdersService {
         adminCI: [client?.adminIdSeries, client?.adminIdNumber]
           .filter(Boolean)
           .join(' '),
+        adminName: client?.adminName ?? '',
+        companyAddress: client?.address ?? '',
+        contractNoAndDate: contract?.contractNo
+          ? `${contract.contractNo}${
+              contractDate
+                ? ` din ${new Date(contractDate).toLocaleDateString('ro-RO')}`
+                : ''
+            }`
+          : '',
       };
       // Preferă HTML formatat (randat prin Chromium); fallback la text/pdfkit.
       const html = await fetchGoogleDocHtml(settings.orderTemplateUrl);

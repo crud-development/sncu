@@ -35,11 +35,13 @@ function fmt(d?: string) {
 
 async function handleDownloadPdf(id: string, setDownloading: (id: string | null) => void) {
   setDownloading(id);
-  toast.info('Descărcarea este în curs, te rugăm să aștepți…');
+  const loadingId = toast.loading('Descărcarea este în curs, te rugăm să aștepți…');
   try {
     await downloadContractPdf(id);
+    toast.dismiss(loadingId);
     toast.success('PDF descărcat.');
   } catch (e) {
+    toast.dismiss(loadingId);
     toast.error(apiError(e));
   } finally {
     setDownloading(null);
@@ -137,12 +139,13 @@ export function Contracte() {
                           </button>
                           {(c.status === 'Semnat' || c.status === 'Expirat') && (
                             <button
-                              className="icon-btn"
+                              className="btn btn--ghost btn--sm"
                               title="Descarcă PDF"
                               disabled={downloadingId === c._id}
                               onClick={() => handleDownloadPdf(c._id, setDownloadingId)}
                             >
-                              <Icon name="download" size={16} />
+                              <Icon name="download" size={15} />
+                              {downloadingId === c._id ? 'Se descarcă…' : 'Descarcă'}
                             </button>
                           )}
                           {c.status === 'Semnat' && (
@@ -185,11 +188,13 @@ function ViewModal({ contract, onClose }: { contract: Contract; onClose: () => v
 
   async function onDownload() {
     setDownloading(true);
-    toast.info('Descărcarea este în curs, te rugăm să aștepți…');
+    const loadingId = toast.loading('Descărcarea este în curs, te rugăm să aștepți…');
     try {
       await downloadContractPdf(contract._id);
+      toast.dismiss(loadingId);
       toast.success('PDF descărcat.');
     } catch (e) {
+      toast.dismiss(loadingId);
       toast.error(apiError(e));
     } finally {
       setDownloading(false);

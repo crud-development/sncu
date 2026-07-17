@@ -221,10 +221,16 @@ export interface AdminOrder {
   orderNo: string;
   companyName?: string;
   cui?: string;
+  contactPhone?: string;
+  contactEmail?: string;
+  contactPerson?: string;
+  wasteName: string;
+  origin: string;
   sncuCategory: string;
   estimatedQuantityKg: number;
   observations?: string;
   status: OrderStatus;
+  desiredDate?: string;
   createdAt: string;
   estimatedCost?: number;
 }
@@ -249,6 +255,19 @@ export const adminGetClient = (id: string) =>
   api.get<Profile>(`/admin/clients/${id}`).then((r) => r.data);
 export const adminUpdateClient = (id: string, data: Record<string, unknown>) =>
   api.patch(`/admin/clients/${id}`, data).then((r) => r.data);
+export const adminExtendContract = (id: string, periodYears: number) =>
+  api
+    .post<{
+      ok: boolean;
+      previousExpiresAt?: string;
+      newExpiresAt: string;
+      amountNoVat: number;
+      amountTotal: number;
+      periodYears: number;
+      paymentId: string;
+      contractId: string | null;
+    }>(`/admin/clients/${id}/extend-contract`, { periodYears })
+    .then((r) => r.data);
 
 export const adminListContracts = () =>
   api.get<AdminContract[]>('/admin/contracts').then((r) => r.data);

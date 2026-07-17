@@ -6,6 +6,7 @@ import {
   IsOptional,
   IsString,
   Min,
+  ValidateIf,
 } from 'class-validator';
 import {
   CATEGORII_SNCU,
@@ -21,7 +22,11 @@ export class CreateOrderDto {
 
   @IsString() wasteName: string;
   @IsIn(ORIGINE_PRODUS as unknown as string[]) origin: string;
-  @IsIn(CATEGORII_SNCU as unknown as string[]) sncuCategory: string;
+
+  /** Obligatoriu doar când originea este „Animala”. */
+  @ValidateIf((o: CreateOrderDto) => o.origin === 'Animala')
+  @IsIn(CATEGORII_SNCU as unknown as string[])
+  sncuCategory?: string;
 
   @Type(() => Number) @IsNumber() @Min(0) estimatedQuantityKg: number;
 

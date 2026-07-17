@@ -1,22 +1,24 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiError } from '../../lib/api';
 import { toast } from '../../lib/toast';
+import { exportExcel } from '../../lib/exportExcel';
 import { useAuth } from '../../auth/AuthContext';
 import { Modal } from '../../components/Modal';
 import { Icon } from '../../components/Icon';
 import { TableSkeleton } from '../../components/Skeleton';
-import { JUDETE, TIP_ACTIVITATE } from '../../lib/constants';
+import { JUDETE, TIP_ACTIVITATE, priceNoVat, formatLei } from '../../lib/constants';
 import {
   adminCancelContract,
   adminCreateClient,
+  adminExtendContract,
   adminGetClient,
   adminImpersonate,
   adminListClients,
   adminUpdateClient,
-  downloadAdminContractPdf,
+  getPaymentConfig,
   lookupAnaf,
   type AdminClient,
 } from '../../lib/resources';
@@ -24,11 +26,37 @@ import {
 function statusBadge(status: string | null) {
   if (!status) return <span className="badge badge--gray">—</span>;
   const cls =
-    status === 'Semnat' ? 'badge--green'
-    : status === 'Anulat' ? 'badge--red'
+    status === 'Activ' || status === 'Semnat' ? 'badge--green'
     : status === 'Expirat' ? 'badge--amber'
+    : status === 'Anulat' ? 'badge--red'
     : 'badge--gray';
   return <span className={`badge ${cls}`}>{status}</span>;
+}
+
+function startOfDay(d: Date) {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+/** Status client pe baza expirării contractului: Activ / Expirat. */
+function clientLifecycleStatus(c: AdminClient): 'Activ' | 'Expirat' | null {
+  if (c.contractStatus === 'Expirat') return 'Expirat';
+  if (c.contractExpiresAt) {
+    return startOfDay(new Date(c.contractExpiresAt)) >= startOfDay(new Date())
+      ? 'Activ'
+      : 'Expirat';
+  }
+  if (c.contractStatus === 'Semnat') return 'Activ';
+  return null;
+}
+
+function hasActiveContract(c: AdminClient): boolean {
+  if (c.contractStatus !== 'Semnat') return false;
+  if (!c.contractExpiresAt) return true;
+  return startOfDay(new Date(c.contractExpiresAt)) >= startOfDay(new Date());
+}
+
+function fmt(d?: string) {
+  return d ? new Date(d).toLocaleDateString('ro-RO') : '';
 }
 
 export function AdminClienti() {
@@ -36,6 +64,14 @@ export function AdminClienti() {
   const { data, isLoading } = useQuery({ queryKey: ['admin-clients'], queryFn: adminListClients });
   const [addOpen, setAddOpen] = useState(false);
   const [editing, setEditing] = useState<AdminClient | null>(null);
+  const [managing, setManaging] = useState<AdminClient | null>(null);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [activeContract, setActiveContract] = useState('');
+  const [createdFrom, setCreatedFrom] = useState('');
+  const [createdTo, setCreatedTo] = useState('');
+  const [expiresFrom, setExpiresFrom] = useState('');
+  const [expiresTo, setExpiresTo] = useState('');
   const { startImpersonation } = useAuth();
   const navigate = useNavigate();
 
@@ -52,8 +88,60 @@ export function AdminClienti() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-clients'] }),
   });
 
-  if (isLoading) return <TableSkeleton cols={10} />;
   const clients = data ?? [];
+
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase().trim();
+    return clients.filter((c) => {
+      if (q) {
+        const hay = [
+          c.companyName,
+          c.cui,
+          c.email,
+          c.phone,
+          c.contactPerson,
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+
+      if (statusFilter) {
+        if (clientLifecycleStatus(c) !== statusFilter) return false;
+      }
+
+      if (activeContract === 'da' && !hasActiveContract(c)) return false;
+      if (activeContract === 'nu' && hasActiveContract(c)) return false;
+
+      if (createdFrom || createdTo) {
+        if (!c.createdAt) return false;
+        const created = new Date(c.createdAt);
+        if (createdFrom && created < new Date(createdFrom)) return false;
+        if (createdTo && created > new Date(createdTo + 'T23:59:59')) return false;
+      }
+
+      if (expiresFrom || expiresTo) {
+        if (!c.contractExpiresAt) return false;
+        const exp = new Date(c.contractExpiresAt);
+        if (expiresFrom && exp < new Date(expiresFrom)) return false;
+        if (expiresTo && exp > new Date(expiresTo + 'T23:59:59')) return false;
+      }
+
+      return true;
+    });
+  }, [
+    clients,
+    search,
+    statusFilter,
+    activeContract,
+    createdFrom,
+    createdTo,
+    expiresFrom,
+    expiresTo,
+  ]);
+
+  if (isLoading) return <TableSkeleton cols={10} />;
 
   return (
     <>
@@ -62,65 +150,245 @@ export function AdminClienti() {
           <span className="page-head__icon"><Icon name="users" /></span>
           <div>
             <h1 className="page-title">Clienți</h1>
-            <p className="page-head__sub">{clients.length} clienți înregistrați în platformă.</p>
+            <p className="page-head__sub">
+              {filtered.length === clients.length
+                ? `${clients.length} clienți înregistrați în platformă.`
+                : `${filtered.length} din ${clients.length} clienți.`}
+            </p>
           </div>
         </div>
-        <button className="btn btn--primary" onClick={() => setAddOpen(true)}>
-          <Icon name="plus" size={17} /> Adaugă client (OP)
-        </button>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button
+            className="btn btn--ghost"
+            disabled={filtered.length === 0}
+            onClick={() => {
+              exportExcel(
+                'clienti.xls',
+                ['Firmă', 'CUI', 'Contact', 'Email', 'Telefon', 'Contract activ', 'Status', 'Creat', 'Expirare', 'Plată'],
+                filtered.map((c) => [
+                  c.companyName,
+                  c.cui,
+                  c.contactPerson || '',
+                  c.email,
+                  c.phone || '',
+                  hasActiveContract(c) ? 'Da' : 'Nu',
+                  clientLifecycleStatus(c) || '',
+                  fmt(c.createdAt),
+                  fmt(c.contractExpiresAt),
+                  c.paymentType,
+                ]),
+              );
+            }}
+          >
+            <Icon name="download" size={17} /> Export Excel
+          </button>
+          <button className="btn btn--primary" onClick={() => setAddOpen(true)}>
+            <Icon name="plus" size={17} /> Adaugă client (OP)
+          </button>
+        </div>
       </div>
 
-      <div className="table-wrap">
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Firmă</th><th>Contact</th><th>Email</th><th>Telefon</th>
-              <th>Contract</th><th>Status</th><th>Creat</th><th>Expirare</th><th>Plată</th><th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {clients.map((c) => (
-              <tr key={c.id}>
-                <td>{c.companyName}<br /><small className="muted">{c.cui}</small></td>
-                <td>{c.contactPerson || '—'}</td>
-                <td>{c.email}</td>
-                <td>{c.phone || '—'}</td>
-                <td>
-                  {c.contractId ? (
-                    <button className="btn btn--ghost btn--sm" onClick={() => downloadAdminContractPdf(c.contractId!)}>
-                      {c.contractNo}
-                    </button>
-                  ) : '—'}
-                </td>
-                <td>{statusBadge(c.contractStatus)}</td>
-                <td>{c.createdAt ? new Date(c.createdAt).toLocaleDateString('ro-RO') : '—'}</td>
-                <td>{c.contractExpiresAt ? new Date(c.contractExpiresAt).toLocaleDateString('ro-RO') : '—'}</td>
-                <td><span className="badge badge--gray">{c.paymentType}</span></td>
-                <td>
-                  <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', alignItems: 'center' }}>
-                    <button className="icon-btn" title="Editează clientul" onClick={() => setEditing(c)}>
-                      <Icon name="edit" size={16} />
-                    </button>
-                    {c.contractId && c.contractStatus === 'Semnat' && (
-                      <button className="icon-btn icon-btn--danger" title="Anulează contractul"
-                        onClick={() => { if (confirm('Anulezi contractul acestui client?')) cancelContract.mutate(c.contractId!); }}>
-                        <Icon name="x" size={16} />
-                      </button>
-                    )}
-                    <button className="btn btn--ghost btn--sm" onClick={() => impersonate.mutate(c.id)}>
-                      Impersonare
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="toolbar">
+        <input
+          className="input"
+          style={{ width: 280 }}
+          placeholder="Caută firmă, CUI, email, telefon, contact…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <select
+          className="select"
+          style={{ width: 'auto' }}
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+        >
+          <option value="">Status: toate</option>
+          <option value="Activ">Activ</option>
+          <option value="Expirat">Expirat</option>
+        </select>
+        <select
+          className="select"
+          style={{ width: 'auto' }}
+          value={activeContract}
+          onChange={(e) => setActiveContract(e.target.value)}
+        >
+          <option value="">Contract activ: toate</option>
+          <option value="da">Contract activ: Da</option>
+          <option value="nu">Contract activ: Nu</option>
+        </select>
+        <span className="muted" style={{ fontSize: 13 }}>Data creare:</span>
+        <input type="date" className="input" style={{ width: 'auto' }} value={createdFrom} onChange={(e) => setCreatedFrom(e.target.value)} />
+        <input type="date" className="input" style={{ width: 'auto' }} value={createdTo} onChange={(e) => setCreatedTo(e.target.value)} />
+        <span className="muted" style={{ fontSize: 13 }}>Expirare:</span>
+        <input type="date" className="input" style={{ width: 'auto' }} value={expiresFrom} onChange={(e) => setExpiresFrom(e.target.value)} />
+        <input type="date" className="input" style={{ width: 'auto' }} value={expiresTo} onChange={(e) => setExpiresTo(e.target.value)} />
       </div>
+
+      {filtered.length === 0 ? (
+        <div className="card empty">
+          <div className="empty__icon"><Icon name="users" size={26} /></div>
+          <div className="empty__title">Niciun client</div>
+          <p>Nu există clienți pentru filtrele curente.</p>
+        </div>
+      ) : (
+        <div className="table-wrap">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Firmă</th><th>Contact</th><th>Email</th><th>Telefon</th>
+                <th>Contract activ</th><th>Status</th><th>Creat</th><th>Expirare</th><th>Plată</th><th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((c) => (
+                <tr key={c.id}>
+                  <td>{c.companyName}<br /><small className="muted">{c.cui}</small></td>
+                  <td>{c.contactPerson || '—'}</td>
+                  <td>{c.email}</td>
+                  <td>{c.phone || '—'}</td>
+                  <td>
+                    <Link
+                      to={`/admin/contracte?q=${encodeURIComponent(c.cui || c.companyName)}`}
+                      className={`badge ${hasActiveContract(c) ? 'badge--green' : 'badge--gray'}`}
+                      title="Vezi contractele clientului"
+                      style={{ textDecoration: 'none' }}
+                    >
+                      {hasActiveContract(c) ? 'Da' : 'Nu'}
+                    </Link>
+                  </td>
+                  <td>{statusBadge(clientLifecycleStatus(c))}</td>
+                  <td>{c.createdAt ? new Date(c.createdAt).toLocaleDateString('ro-RO') : '—'}</td>
+                  <td>{c.contractExpiresAt ? new Date(c.contractExpiresAt).toLocaleDateString('ro-RO') : '—'}</td>
+                  <td><span className="badge badge--gray">{c.paymentType}</span></td>
+                  <td>
+                    <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', alignItems: 'center' }}>
+                      <button className="btn btn--ghost btn--sm" onClick={() => setManaging(c)}>
+                        Gestionează
+                      </button>
+                      <button className="icon-btn" title="Editează clientul" onClick={() => setEditing(c)}>
+                        <Icon name="edit" size={16} />
+                      </button>
+                      {c.contractId && c.contractStatus === 'Semnat' && (
+                        <button className="icon-btn icon-btn--danger" title="Anulează contractul"
+                          onClick={() => { if (confirm('Anulezi contractul acestui client?')) cancelContract.mutate(c.contractId!); }}>
+                          <Icon name="x" size={16} />
+                        </button>
+                      )}
+                      <button className="btn btn--ghost btn--sm" onClick={() => impersonate.mutate(c.id)}>
+                        Impersonare
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {addOpen && <AddClientModal onClose={() => setAddOpen(false)} />}
       {editing && <EditClientModal client={editing} onClose={() => setEditing(null)} />}
+      {managing && (
+        <ManageClientModal
+          client={managing}
+          onClose={() => setManaging(null)}
+          onExtended={() => {
+            setManaging(null);
+            qc.invalidateQueries({ queryKey: ['admin-clients'] });
+          }}
+        />
+      )}
     </>
+  );
+}
+
+function ManageClientModal({
+  client,
+  onClose,
+  onExtended,
+}: {
+  client: AdminClient;
+  onClose: () => void;
+  onExtended: () => void;
+}) {
+  const [periodYears, setPeriodYears] = useState(1);
+  const [error, setError] = useState('');
+  const pricingQ = useQuery({
+    queryKey: ['payment-config'],
+    queryFn: getPaymentConfig,
+  });
+
+  const extend = useMutation({
+    mutationFn: () => adminExtendContract(client.id, periodYears),
+    meta: { successMessage: 'Contract prelungit. Plata OP a fost înregistrată.' },
+    onSuccess: onExtended,
+    onError: (e) => setError(apiError(e)),
+  });
+
+  const pricing = pricingQ.data?.pricing;
+  const yearlyNoVat = pricing ? priceNoVat(pricing) : 0;
+  const yearlyTotal = pricing ? yearlyNoVat * (1 + pricing.vatRate) : 0;
+  const amountNoVat = yearlyNoVat * periodYears;
+  const amountTotal = yearlyTotal * periodYears;
+
+  const currentExpiry = client.contractExpiresAt
+    ? new Date(client.contractExpiresAt)
+    : null;
+  const now = new Date();
+  const base = currentExpiry && currentExpiry > now ? currentExpiry : now;
+  const previewExpiry = new Date(base);
+  previewExpiry.setFullYear(previewExpiry.getFullYear() + periodYears);
+
+  return (
+    <Modal title={`Gestionează — ${client.companyName}`} onClose={onClose}>
+      {error && <div className="alert alert--error">{error}</div>}
+
+      <div style={{ display: 'grid', gap: 8, marginBottom: 18, fontSize: 13 }}>
+        <span className="muted">
+          Expirare curentă:{' '}
+          <strong style={{ color: 'var(--ink)' }}>
+            {currentExpiry ? currentExpiry.toLocaleDateString('ro-RO') : '—'}
+          </strong>
+        </span>
+      </div>
+
+      <div className="form-section-title">Prelungește contract</div>
+      <p className="muted" style={{ fontSize: 13, marginBottom: 14 }}>
+        Selectează perioada de prelungire. Se înregistrează automat o plată OP în baza de date.
+      </p>
+
+      <div className="field">
+        <label>Perioadă prelungire *</label>
+        <select
+          className="select"
+          value={periodYears}
+          onChange={(e) => setPeriodYears(Number(e.target.value))}
+        >
+          <option value={1}>1 an</option>
+          <option value={2}>2 ani</option>
+          <option value={3}>3 ani</option>
+        </select>
+      </div>
+
+      <div className="alert alert--success" style={{ marginBottom: 16 }}>
+        Noua expirare: <strong>{previewExpiry.toLocaleDateString('ro-RO')}</strong>
+        {pricing && (
+          <>
+            <br />
+            Plată OP: <strong>{formatLei(amountTotal)}</strong>
+            {' '}({formatLei(amountNoVat)} + TVA) pentru {periodYears} {periodYears === 1 ? 'an' : 'ani'}
+          </>
+        )}
+      </div>
+
+      <button
+        className="btn btn--primary btn--block"
+        disabled={extend.isPending || !pricing}
+        onClick={() => extend.mutate()}
+      >
+        {extend.isPending ? 'Se salvează…' : 'Salvează prelungirea'}
+      </button>
+    </Modal>
   );
 }
 
@@ -215,7 +483,21 @@ function AddClientModal({ onClose }: { onClose: () => void }) {
   }
 
   const create = useMutation({
-    mutationFn: (v: any) => adminCreateClient(v),
+    mutationFn: (v: any) =>
+      adminCreateClient({
+        companyName: v.companyName,
+        cui: v.cui,
+        regCom: v.regCom || undefined,
+        address: v.address,
+        city: v.city,
+        judet: v.judet,
+        tipActivitate: v.tipActivitate,
+        contactFirstName: v.contactFirstName,
+        contactLastName: v.contactLastName,
+        email: v.email,
+        phone: v.phone,
+        contractExpiresAt: v.contractExpiresAt,
+      }),
     meta: { successMessage: 'Client creat. Emailul de activare a fost trimis.' },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['admin-clients'] });
@@ -272,13 +554,12 @@ function AddClientModal({ onClose }: { onClose: () => void }) {
           <div className="field"><label>Email *</label><input type="email" className="input" {...register('email', { required: true })} /></div>
           <div className="field"><label>Telefon *</label><input className="input" {...register('phone', { required: true })} /></div>
           <div className="field"><label>Data expirare contract *</label><input type="date" className="input" {...register('contractExpiresAt', { required: true })} /></div>
-          <div className="field"><label>Nr. puncte de lucru</label><input type="number" min={1} className="input" defaultValue={1} {...register('workpoints')} /></div>
         </div>
         <p className="muted" style={{ fontSize: 13, margin: '4px 0 14px' }}>
           Plata este setată automat pe <strong>OP</strong>. Contul se creează inactiv și primește email de activare.
         </p>
-        <button className="btn btn--primary btn--block" disabled={isSubmitting}>
-          {isSubmitting ? 'Se salvează…' : 'Creează client'}
+        <button className="btn btn--primary btn--block" disabled={isSubmitting || create.isPending}>
+          {isSubmitting || create.isPending ? 'Se salvează…' : 'Creează client'}
         </button>
       </form>
     </Modal>

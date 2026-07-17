@@ -83,22 +83,31 @@ export class AuthService {
     email: string;
     phone: string;
     contractExpiresAt: string;
-    workpoints?: number;
   }): Promise<ClientDocument> {
     if (await this.clients.findByEmail(data.email)) {
       throw new BadRequestException('Există deja un cont cu acest email');
     }
     const ttl = this.config.get<number>('activationTtlHours') ?? 24;
     const client = await this.clients.create({
-      ...data,
+      companyName: data.companyName,
+      cui: data.cui,
+      regCom: data.regCom,
+      address: data.address,
+      city: data.city,
+      judet: data.judet,
+      tipActivitate: data.tipActivitate,
+      contactFirstName: data.contactFirstName,
+      contactLastName: data.contactLastName,
+      email: data.email,
+      phone: data.phone,
       paymentType: PaymentType.OP,
       status: AccountStatus.INACTIV,
-      workpointsAllowed: data.workpoints ?? 1,
+      workpointsAllowed: 1,
       contractExpiresAt: new Date(data.contractExpiresAt),
       activationToken: randomBytes(32).toString('hex'),
       activationExpiresAt: new Date(Date.now() + ttl * 3600_000),
     });
-    await this.sendActivation(client);
+    await this.sendActivation(client).catch(() => undefined);
     return client;
   }
 

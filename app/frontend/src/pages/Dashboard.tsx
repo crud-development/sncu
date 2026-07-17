@@ -3,7 +3,6 @@ import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../auth/AuthContext';
 import { Icon } from '../components/Icon';
 import {
-  getProfile,
   listContracts,
   listOrders,
   listWorkpoints,
@@ -15,7 +14,6 @@ function fmt(d?: string) {
 
 export function Dashboard() {
   const { user } = useAuth();
-  const profileQ = useQuery({ queryKey: ['profile'], queryFn: getProfile });
   const wpQ = useQuery({ queryKey: ['workpoints'], queryFn: listWorkpoints });
   const contractsQ = useQuery({ queryKey: ['contracts'], queryFn: listContracts });
   const ordersQ = useQuery({ queryKey: ['orders'], queryFn: listOrders });
@@ -30,7 +28,7 @@ export function Dashboard() {
   const openOrders = orders.filter((o) => o.status === 'Plasată' || o.status === 'Confirmată').length;
 
   const stats = [
-    { icon: 'pin', label: 'Puncte de lucru', value: `${workpoints.length}${profileQ.data ? ` / ${profileQ.data.workpointsAllowed}` : ''}` },
+    { icon: 'pin', label: 'Puncte de lucru', value: workpoints.length },
     { icon: 'contract', label: 'Contracte active', value: contracts.filter((c) => c.status === 'Semnat').length, tone: '' },
     { icon: 'order', label: 'Comenzi în lucru', value: openOrders, tone: 'blue' },
   ];

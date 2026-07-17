@@ -44,9 +44,7 @@ export default () => ({
 
   pricing: {
     base: parseFloat(process.env.PRICE_BASE ?? '330'),
-    extraWorkpoint: parseFloat(process.env.PRICE_EXTRA_WORKPOINT ?? '49.49'),
-    includedWorkpoints: parseInt(process.env.INCLUDED_WORKPOINTS ?? '3', 10),
-    vatRate: parseFloat(process.env.VAT_RATE ?? '0.19'),
+    vatRate: parseFloat(process.env.VAT_RATE ?? '0.21'),
   },
 });
 

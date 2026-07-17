@@ -1,12 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiError } from '../../lib/api';
+import { toast } from '../../lib/toast';
+import { exportExcel } from '../../lib/exportExcel';
 import { Icon } from '../../components/Icon';
 import { Modal } from '../../components/Modal';
 import { TableSkeleton } from '../../components/Skeleton';
 import {
   CATEGORII_SNCU,
+  ORDER_STATUS,
   ORIGINE_PRODUS,
   STARE_PRODUS,
   TIP_AMBALARE,
@@ -40,11 +43,31 @@ const STATUS_CLASS: Record<OrderStatus, string> = {
   Anulată: 'badge--red',
 };
 
+function fmt(d?: string) {
+  return d ? new Date(d).toLocaleDateString('ro-RO') : '';
+}
+
+function inDateRange(value: string | undefined, from: string, to: string): boolean {
+  if (!from && !to) return true;
+  if (!value) return false;
+  const d = new Date(value);
+  if (from && d < new Date(from)) return false;
+  if (to && d > new Date(to + 'T23:59:59')) return false;
+  return true;
+}
+
 export function AdminComenzi() {
   const qc = useQueryClient();
   const { data, isLoading } = useQuery({ queryKey: ['admin-orders'], queryFn: adminListOrders });
   const [addOpen, setAddOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [originFilter, setOriginFilter] = useState('');
+  const [createdFrom, setCreatedFrom] = useState('');
+  const [createdTo, setCreatedTo] = useState('');
+  const [placedFrom, setPlacedFrom] = useState('');
+  const [placedTo, setPlacedTo] = useState('');
 
   const setStatus = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) => adminSetOrderStatus(id, status),
@@ -52,8 +75,43 @@ export function AdminComenzi() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-orders'] }),
   });
 
-  if (isLoading) return <TableSkeleton cols={9} />;
   const orders = data ?? [];
+
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase().trim();
+    return orders.filter((o) => {
+      if (q) {
+        const hay = [
+          o.orderNo,
+          o.companyName,
+          o.contactPhone,
+          o.contactEmail,
+          o.contactPerson,
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      if (statusFilter && o.status !== statusFilter) return false;
+      if (originFilter && o.origin !== originFilter) return false;
+      if (!inDateRange(o.createdAt, createdFrom, createdTo)) return false;
+      // Data plasare = data dorită de ridicare (desiredDate); fallback pe createdAt.
+      if (!inDateRange(o.desiredDate || o.createdAt, placedFrom, placedTo)) return false;
+      return true;
+    });
+  }, [
+    orders,
+    search,
+    statusFilter,
+    originFilter,
+    createdFrom,
+    createdTo,
+    placedFrom,
+    placedTo,
+  ]);
+
+  if (isLoading) return <TableSkeleton cols={13} />;
 
   return (
     <>
@@ -62,32 +120,128 @@ export function AdminComenzi() {
           <span className="page-head__icon"><Icon name="order" /></span>
           <div>
             <h1 className="page-title">Comenzi</h1>
-            <p className="page-head__sub">Adaugă, schimbă statusul, setează costul, descarcă cererile.</p>
+            <p className="page-head__sub">
+              {filtered.length === orders.length
+                ? 'Adaugă, schimbă statusul, setează costul, descarcă cererile.'
+                : `${filtered.length} din ${orders.length} comenzi.`}
+            </p>
           </div>
         </div>
-        <button className="btn btn--primary" onClick={() => setAddOpen(true)}>
-          <Icon name="plus" size={17} /> Adaugă comandă
-        </button>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button
+            className="btn btn--ghost"
+            disabled={filtered.length === 0}
+            onClick={() => {
+              exportExcel(
+                'comenzi.xls',
+                [
+                  'Nr.', 'Firmă', 'CUI', 'Telefon', 'Email', 'Persoană contact',
+                  'Data creare', 'Data plasare', 'Denumire deșeu', 'Origine deșeu',
+                  'Tip SNCU', 'Cantitate (kg)', 'Status', 'Cost estimat',
+                ],
+                filtered.map((o) => [
+                  o.orderNo,
+                  o.companyName || '',
+                  o.cui || '',
+                  o.contactPhone || '',
+                  o.contactEmail || '',
+                  o.contactPerson || '',
+                  fmt(o.createdAt),
+                  fmt(o.desiredDate || o.createdAt),
+                  o.wasteName || '',
+                  o.origin || '',
+                  o.sncuCategory,
+                  o.estimatedQuantityKg,
+                  o.status,
+                  o.estimatedCost ?? '',
+                ]),
+              );
+            }}
+          >
+            <Icon name="download" size={17} /> Export Excel
+          </button>
+          <button className="btn btn--primary" onClick={() => setAddOpen(true)}>
+            <Icon name="plus" size={17} /> Adaugă comandă
+          </button>
+        </div>
       </div>
+
+      <div className="toolbar">
+        <input
+          className="input"
+          style={{ width: 280 }}
+          placeholder="Caută nr. comandă, firmă, telefon, email, contact…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <select
+          className="select"
+          style={{ width: 'auto' }}
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+        >
+          <option value="">Status: toate</option>
+          {ORDER_STATUS.map((s) => (
+            <option key={s} value={s}>{s}</option>
+          ))}
+        </select>
+        <select
+          className="select"
+          style={{ width: 'auto' }}
+          value={originFilter}
+          onChange={(e) => setOriginFilter(e.target.value)}
+        >
+          <option value="">Origine: toate</option>
+          {ORIGINE_PRODUS.map((o) => (
+            <option key={o} value={o}>{o}</option>
+          ))}
+        </select>
+        <span className="muted" style={{ fontSize: 13 }}>Data creare:</span>
+        <input type="date" className="input" style={{ width: 'auto' }} value={createdFrom} onChange={(e) => setCreatedFrom(e.target.value)} />
+        <input type="date" className="input" style={{ width: 'auto' }} value={createdTo} onChange={(e) => setCreatedTo(e.target.value)} />
+        <span className="muted" style={{ fontSize: 13 }}>Data plasare:</span>
+        <input type="date" className="input" style={{ width: 'auto' }} value={placedFrom} onChange={(e) => setPlacedFrom(e.target.value)} />
+        <input type="date" className="input" style={{ width: 'auto' }} value={placedTo} onChange={(e) => setPlacedTo(e.target.value)} />
+      </div>
+
       {addOpen && <AdminOrderForm onClose={() => setAddOpen(false)} onSaved={() => { setAddOpen(false); qc.invalidateQueries({ queryKey: ['admin-orders'] }); }} />}
       {editId && <AdminOrderForm editOrderId={editId} onClose={() => setEditId(null)} onSaved={() => { setEditId(null); qc.invalidateQueries({ queryKey: ['admin-orders'] }); }} />}
-      <div className="table-wrap">
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Nr.</th><th>Firmă</th><th>CUI</th><th>Tip SNCU</th><th>Cantitate</th>
-              <th>Dată</th><th>Status</th><th>Cost estimat</th><th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {orders.map((o) => (
-              <OrderRow key={o.id} order={o}
-                onStatus={(status) => setStatus.mutate({ id: o.id, status })}
-                onEdit={() => setEditId(o.id)} />
-            ))}
-          </tbody>
-        </table>
-      </div>
+
+      {filtered.length === 0 ? (
+        <div className="card empty">
+          <div className="empty__icon"><Icon name="order" size={26} /></div>
+          <div className="empty__title">Nicio comandă</div>
+          <p>Nu există comenzi pentru filtrele curente.</p>
+        </div>
+      ) : (
+        <div className="table-wrap">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Nr.</th>
+                <th>Firmă</th>
+                <th>CUI</th>
+                <th>Telefon</th>
+                <th>Data plasare</th>
+                <th>Denumire deșeu</th>
+                <th>Origine deșeu</th>
+                <th>Tip SNCU</th>
+                <th>Cantitate</th>
+                <th>Status</th>
+                <th>Cost estimat</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((o) => (
+                <OrderRow key={o.id} order={o}
+                  onStatus={(status) => setStatus.mutate({ id: o.id, status })}
+                  onEdit={() => setEditId(o.id)} />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </>
   );
 }
@@ -95,6 +249,7 @@ export function AdminComenzi() {
 function OrderRow({ order, onStatus, onEdit }: { order: AdminOrder; onStatus: (s: string) => void; onEdit: () => void }) {
   const qc = useQueryClient();
   const [cost, setCost] = useState(order.estimatedCost?.toString() ?? '');
+  const [downloading, setDownloading] = useState(false);
   const saveCost = useMutation({
     mutationFn: () => adminSetOrderCost(order.id, Number(cost)),
     meta: { successMessage: 'Cost estimat salvat.' },
@@ -102,14 +257,32 @@ function OrderRow({ order, onStatus, onEdit }: { order: AdminOrder; onStatus: (s
   });
   const next = NEXT[order.status];
 
+  async function handleDownload() {
+    setDownloading(true);
+    const loadingId = toast.loading('Se descarcă comanda, te rugăm să aștepți…');
+    try {
+      await downloadAdminOrderPdf(order.id);
+      toast.dismiss(loadingId);
+      toast.success('Comanda a fost descărcată.');
+    } catch (e) {
+      toast.dismiss(loadingId);
+      toast.error(apiError(e));
+    } finally {
+      setDownloading(false);
+    }
+  }
+
   return (
     <tr>
       <td>{order.orderNo}</td>
       <td>{order.companyName || '—'}</td>
       <td>{order.cui || '—'}</td>
+      <td>{order.contactPhone || '—'}</td>
+      <td>{fmt(order.createdAt) || '—'}</td>
+      <td>{order.wasteName || '—'}</td>
+      <td>{order.origin || '—'}</td>
       <td>{order.sncuCategory}</td>
       <td>{order.estimatedQuantityKg} kg</td>
-      <td>{new Date(order.createdAt).toLocaleDateString('ro-RO')}</td>
       <td>
         <span className={`badge ${STATUS_CLASS[order.status]}`}>{order.status}</span>
         {next.length > 0 && (
@@ -133,7 +306,12 @@ function OrderRow({ order, onStatus, onEdit }: { order: AdminOrder; onStatus: (s
           <button className="icon-btn" title="Vezi / editează comanda" onClick={onEdit}>
             <Icon name="edit" size={16} />
           </button>
-          <button className="icon-btn" title="Descarcă cererea (PDF)" onClick={() => downloadAdminOrderPdf(order.id)}>
+          <button
+            className="icon-btn"
+            title="Descarcă cererea (PDF)"
+            disabled={downloading}
+            onClick={handleDownload}
+          >
             <Icon name="download" size={16} />
           </button>
         </div>
@@ -156,6 +334,8 @@ function AdminOrderForm({ onClose, onSaved, editOrderId }: { onClose: () => void
   const [error, setError] = useState('');
   const { register, handleSubmit, watch, setValue, reset, formState: { isSubmitting } } = useForm<any>();
   const clientId = watch('clientId');
+  const origin = watch('origin');
+  const sncuRequired = origin === 'Animala';
 
   const clientsQ = useQuery({ queryKey: ['admin-clients'], queryFn: adminListClients, enabled: !isEdit });
   const wpQ = useQuery({
@@ -200,6 +380,7 @@ function AdminOrderForm({ onClose, onSaved, editOrderId }: { onClose: () => void
       } else {
         await adminCreateOrder({
           ...values,
+          sncuCategory: values.origin === 'Animala' ? values.sncuCategory : (values.sncuCategory || undefined),
           estimatedQuantityKg: Number(values.estimatedQuantityKg),
           accountingValue: num(values.accountingValue),
         });
@@ -254,11 +435,19 @@ function AdminOrderForm({ onClose, onSaved, editOrderId }: { onClose: () => void
           <div className="field"><label>Denumire deșeu/produs *</label>
             <input className="input" {...register('wasteName', { required: true })} /></div>
           <div className="field"><label>Origine *</label>
-            <select className="select" {...register('origin', { required: true })}>
+            <select
+              className="select"
+              {...register('origin', {
+                required: true,
+                onChange: (e) => {
+                  if (e.target.value !== 'Animala') setValue('sncuCategory', '');
+                },
+              })}
+            >
               <option value="">Alege…</option>{ORIGINE_PRODUS.map((o) => <option key={o} value={o}>{o}</option>)}
             </select></div>
-          <div className="field"><label>Categorie SNCU *</label>
-            <select className="select" {...register('sncuCategory', { required: true })}>
+          <div className="field"><label>Categorie SNCU{sncuRequired ? ' *' : ''}</label>
+            <select className="select" {...register('sncuCategory', { required: sncuRequired })}>
               <option value="">Alege…</option>{CATEGORII_SNCU.map((c) => <option key={c} value={c}>{c}</option>)}
             </select></div>
           <div className="field"><label>Cantitate estimată (kg) *</label>

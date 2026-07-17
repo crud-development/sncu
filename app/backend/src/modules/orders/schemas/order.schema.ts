@@ -47,8 +47,9 @@ export class Order {
   @Prop({ required: true })
   origin: string;
 
-  @Prop({ required: true })
-  sncuCategory: string;
+  /** Obligatoriu în UI/API doar pentru origine Animală. */
+  @Prop()
+  sncuCategory?: string;
 
   @Prop({ required: true })
   estimatedQuantityKg: number;

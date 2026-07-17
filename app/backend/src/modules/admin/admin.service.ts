@@ -1,8 +1,13 @@
-import { Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+} from '@nestjs/common';
 import { ClientsService } from '../clients/clients.service';
 import { ContractsService } from '../contracts/contracts.service';
 import { OrdersService } from '../orders/orders.service';
 import { WorkpointsService } from '../workpoints/workpoints.service';
+import { PaymentsService } from '../payments/payments.service';
+import { PaymentType } from '../clients/schemas/client.schema';
 import {
   ContractDocument,
   ContractStatus,
@@ -15,6 +20,7 @@ export class AdminService {
     private readonly contracts: ContractsService,
     private readonly orders: OrdersService,
     private readonly workpoints: WorkpointsService,
+    private readonly payments: PaymentsService,
   ) {}
 
   /** Punctele de lucru ale unui client (pentru formularul de comandă din admin). */
@@ -51,6 +57,62 @@ export class AdminService {
   async updateClient(id: string, data: Record<string, unknown>) {
     await this.clients.updateProfile(id, data);
     return { ok: true };
+  }
+
+  /**
+   * Prelungește manual contractul unui client: actualizează expirarea,
+   * înregistrează o plată OP în DB.
+   */
+  async extendContract(clientId: string, periodYears: number) {
+    if (![1, 2, 3].includes(periodYears)) {
+      throw new BadRequestException('Perioada trebuie să fie 1, 2 sau 3 ani.');
+    }
+
+    const client = await this.clients.getOrFail(clientId);
+    const now = new Date();
+    const previousExpiresAt = client.contractExpiresAt
+      ? new Date(client.contractExpiresAt)
+      : undefined;
+    const base =
+      previousExpiresAt && previousExpiresAt > now ? previousExpiresAt : now;
+    const newExpiresAt = new Date(base);
+    newExpiresAt.setFullYear(newExpiresAt.getFullYear() + periodYears);
+
+    const { noVat, total } = this.payments.computeAmount();
+    const amountNoVat = round2(noVat * periodYears);
+    const amountTotal = round2(total * periodYears);
+
+    const contract = await this.contracts.extendLatestExpiry(
+      clientId,
+      newExpiresAt,
+    );
+
+    await this.clients.updateProfile(clientId, {
+      contractExpiresAt: newExpiresAt,
+      paymentType: PaymentType.OP,
+    });
+
+    const payment = await this.payments.recordOpExtension({
+      clientId,
+      periodYears,
+      amountNoVat,
+      amountTotal,
+      previousExpiresAt,
+      newExpiresAt,
+      contractId: contract?.id,
+      note: `Prelungire manuală ${periodYears} ${periodYears === 1 ? 'an' : 'ani'}`,
+    });
+
+    return {
+      ok: true,
+      previousExpiresAt,
+      newExpiresAt,
+      amountNoVat,
+      amountTotal,
+      periodYears,
+      paymentId: payment.id,
+      contractId: contract?.id ?? null,
+    };
   }
 
   /** 4.1.1 — tabel clienți cu info contract. */
@@ -119,12 +181,22 @@ export class AdminService {
       orderNo: o.orderNo,
       companyName: o.companyName,
       cui: o.cui,
+      contactPhone: o.contactPhone,
+      contactEmail: o.contactEmail,
+      contactPerson: o.contactPerson,
+      wasteName: o.wasteName,
+      origin: o.origin,
       sncuCategory: o.sncuCategory,
       estimatedQuantityKg: o.estimatedQuantityKg,
       observations: o.observations,
       status: o.status,
+      desiredDate: o.desiredDate,
       createdAt: (o as any).createdAt,
       estimatedCost: o.estimatedCost,
     }));
   }
+}
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
 }

@@ -1,9 +1,13 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Icon } from '../../components/Icon';
 import { Modal } from '../../components/Modal';
 import { DocFrame } from '../../components/DocFrame';
 import { TableSkeleton } from '../../components/Skeleton';
+import { apiError } from '../../lib/api';
+import { exportExcel } from '../../lib/exportExcel';
+import { toast } from '../../lib/toast';
 import {
   adminCancelContract,
   adminGetContractHtml,
@@ -18,16 +22,41 @@ const STATUS_CLASS: Record<string, string> = {
 };
 const fmt = (d?: string) => (d ? new Date(d).toLocaleDateString('ro-RO') : '—');
 
+async function handleAdminDownload(
+  id: string,
+  setDownloading: (id: string | null) => void,
+) {
+  setDownloading(id);
+  const loadingId = toast.loading('Descărcarea este în curs, te rugăm să aștepți…');
+  try {
+    await downloadAdminContractPdf(id);
+    toast.dismiss(loadingId);
+    toast.success('PDF descărcat.');
+  } catch (e) {
+    toast.dismiss(loadingId);
+    toast.error(apiError(e));
+  } finally {
+    setDownloading(null);
+  }
+}
+
 export function AdminContracte() {
   const qc = useQueryClient();
+  const [params] = useSearchParams();
   const { data, isLoading } = useQuery({ queryKey: ['admin-contracts'], queryFn: adminListContracts });
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(() => params.get('q') ?? '');
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [cFrom, setCFrom] = useState('');
   const [cTo, setCTo] = useState('');
   const [eFrom, setEFrom] = useState('');
   const [eTo, setETo] = useState('');
   const [viewing, setViewing] = useState<AdminContract | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const q = params.get('q');
+    if (q != null) setSearch(q);
+  }, [params]);
 
   const cancel = useMutation({
     mutationFn: adminCancelContract,
@@ -57,18 +86,20 @@ export function AdminContracte() {
     setStatusFilter((f) => (f.includes(s) ? f.filter((x) => x !== s) : [...f, s]));
   }
 
-  function exportCsv() {
-    const head = ['Firmă', 'CUI', 'Serie/Nr', 'Data', 'Pct lucru', 'Expirare', 'Status'];
-    const rows = filtered.map((c) => [
-      c.companyName, c.cui, c.contractNo ?? '', fmt(c.signedAt ?? c.createdAt),
-      c.workpointsCount, fmt(c.expiresAt), c.status,
-    ]);
-    const csv = [head, ...rows].map((r) => r.map((x) => `"${String(x).replace(/"/g, '""')}"`).join(',')).join('\n');
-    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = 'contracte.csv'; a.click();
-    URL.revokeObjectURL(url);
+  function exportXls() {
+    exportExcel(
+      'contracte.xls',
+      ['Firmă', 'CUI', 'Serie/Nr', 'Data', 'Pct lucru', 'Expirare', 'Status'],
+      filtered.map((c) => [
+        c.companyName,
+        c.cui,
+        c.contractNo ?? '',
+        fmt(c.signedAt ?? c.createdAt),
+        c.workpointsCount,
+        fmt(c.expiresAt),
+        c.status,
+      ]),
+    );
   }
 
   return (
@@ -97,7 +128,9 @@ export function AdminContracte() {
           <button key={s} className={`btn btn--sm ${statusFilter.includes(s) ? 'btn--primary' : 'btn--ghost'}`}
             onClick={() => toggleStatus(s)}>{s}</button>
         ))}
-        <button className="btn btn--ghost btn--sm" onClick={exportCsv} disabled={!filtered.length}>Export</button>
+        <button className="btn btn--ghost btn--sm" onClick={exportXls} disabled={!filtered.length}>
+          <Icon name="download" size={15} /> Export Excel
+        </button>
       </div>
 
       {filtered.length === 0 ? (
@@ -127,8 +160,14 @@ export function AdminContracte() {
                         <Icon name="eye" size={16} />
                       </button>
                       {c.contractNo && (
-                        <button className="icon-btn" title="Descarcă PDF" onClick={() => downloadAdminContractPdf(c.id)}>
-                          <Icon name="download" size={16} />
+                        <button
+                          className="btn btn--ghost btn--sm"
+                          title="Descarcă PDF"
+                          disabled={downloadingId === c.id}
+                          onClick={() => handleAdminDownload(c.id, setDownloadingId)}
+                        >
+                          <Icon name="download" size={15} />
+                          {downloadingId === c.id ? 'Se descarcă…' : 'Descarcă'}
                         </button>
                       )}
                       {c.canCancel && (
@@ -156,6 +195,23 @@ function AdminContractView({ contract, onClose }: { contract: AdminContract; onC
     queryKey: ['admin-contract-html', contract.id],
     queryFn: () => adminGetContractHtml(contract.id),
   });
+  const [downloading, setDownloading] = useState(false);
+
+  async function onDownload() {
+    setDownloading(true);
+    const loadingId = toast.loading('Descărcarea este în curs, te rugăm să aștepți…');
+    try {
+      await downloadAdminContractPdf(contract.id);
+      toast.dismiss(loadingId);
+      toast.success('PDF descărcat.');
+    } catch (e) {
+      toast.dismiss(loadingId);
+      toast.error(apiError(e));
+    } finally {
+      setDownloading(false);
+    }
+  }
+
   return (
     <Modal title={contract.contractNo ? `Contract ${contract.contractNo}` : 'Contract (draft)'} onClose={onClose} wide>
       <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', marginBottom: 16, fontSize: 13 }}>
@@ -166,8 +222,13 @@ function AdminContractView({ contract, onClose }: { contract: AdminContract; onC
       </div>
       <DocFrame html={htmlQ.data} height={520} />
       {contract.contractNo && (
-        <button className="btn btn--ghost btn--block" style={{ marginTop: 16 }} onClick={() => downloadAdminContractPdf(contract.id)}>
-          <Icon name="download" size={16} /> Descarcă PDF
+        <button
+          className="btn btn--ghost btn--block"
+          style={{ marginTop: 16 }}
+          disabled={downloading}
+          onClick={onDownload}
+        >
+          <Icon name="download" size={16} /> {downloading ? 'Se descarcă…' : 'Descarcă PDF'}
         </button>
       )}
     </Modal>

@@ -22,6 +22,7 @@ import {
   AdminCreateClientDto,
   AdminCreateOrderDto,
   AdminUpdateOrderDto,
+  ExtendContractDto,
   SetOrderCostDto,
   UpdateOrderStatusDto,
   UpdateSettingsDto,
@@ -66,6 +67,11 @@ export class AdminClientsController {
   @Post(':id/impersonate')
   impersonate(@Param('id') id: string) {
     return this.auth.tokenForClient(id);
+  }
+
+  @Post(':id/extend-contract')
+  extendContract(@Param('id') id: string, @Body() dto: ExtendContractDto) {
+    return this.admin.extendContract(id, dto.periodYears);
   }
 }
 

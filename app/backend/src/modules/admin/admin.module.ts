@@ -5,6 +5,7 @@ import { ContractsModule } from '../contracts/contracts.module';
 import { OrdersModule } from '../orders/orders.module';
 import { WorkpointsModule } from '../workpoints/workpoints.module';
 import { SettingsModule } from '../settings/settings.module';
+import { PaymentsModule } from '../payments/payments.module';
 import { AdminService } from './admin.service';
 import { SeedService } from './seed.service';
 import {
@@ -22,6 +23,7 @@ import {
     OrdersModule,
     WorkpointsModule,
     SettingsModule,
+    PaymentsModule,
   ],
   controllers: [
     AdminClientsController,

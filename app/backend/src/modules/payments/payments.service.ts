@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { randomBytes } from 'crypto';
 import Stripe from 'stripe';
 import { ClientsService } from '../clients/clients.service';
@@ -17,6 +17,12 @@ import {
   PendingRegistration,
   PendingRegistrationDocument,
 } from './schemas/pending-registration.schema';
+import {
+  Payment,
+  PaymentDocument,
+  PaymentKind,
+  PaymentRecordType,
+} from './schemas/payment.schema';
 
 @Injectable()
 export class PaymentsService {
@@ -26,6 +32,8 @@ export class PaymentsService {
   constructor(
     @InjectModel(PendingRegistration.name)
     private readonly pending: Model<PendingRegistrationDocument>,
+    @InjectModel(Payment.name)
+    private readonly payments: Model<PaymentDocument>,
     private readonly config: ConfigService,
     private readonly clients: ClientsService,
     private readonly auth: AuthService,
@@ -48,8 +56,6 @@ export class PaymentsService {
     mock: boolean;
     pricing: {
       base: number;
-      extraWorkpoint: number;
-      includedWorkpoints: number;
       vatRate: number;
     };
   } {
@@ -60,15 +66,14 @@ export class PaymentsService {
     };
   }
 
-  /** Preț (lei) pentru un număr de puncte de lucru, conform analizei. */
-  computeAmount(workpoints: number): {
+  /** Preț fix anual (lei): base + TVA, indiferent de numărul de puncte de lucru. */
+  computeAmount(): {
     noVat: number;
     vat: number;
     total: number;
   } {
     const p = this.config.get('pricing');
-    const extra = Math.max(0, workpoints - p.includedWorkpoints);
-    const noVat = round2(p.base + extra * p.extraWorkpoint);
+    const noVat = round2(p.base);
     const total = round2(noVat * (1 + p.vatRate));
     return { noVat, vat: round2(total - noVat), total };
   }
@@ -78,8 +83,7 @@ export class PaymentsService {
     if (await this.clients.findByEmail(dto.email)) {
       throw new BadRequestException('Există deja un cont cu acest email');
     }
-    const workpoints = dto.workpoints ?? 1;
-    const { noVat, total } = this.computeAmount(workpoints);
+    const { noVat, total } = this.computeAmount();
 
     let paymentIntentId: string;
     let clientSecret: string;
@@ -184,6 +188,41 @@ export class PaymentsService {
       );
     }
     return this.provision(paymentIntentId);
+  }
+
+  /** Înregistrează o plată OP de prelungire (fără Stripe). */
+  async recordOpExtension(input: {
+    clientId: string;
+    periodYears: number;
+    amountNoVat: number;
+    amountTotal: number;
+    previousExpiresAt?: Date;
+    newExpiresAt: Date;
+    contractId?: string;
+    note?: string;
+  }): Promise<PaymentDocument> {
+    return this.payments.create({
+      clientId: new Types.ObjectId(input.clientId),
+      type: PaymentRecordType.OP,
+      kind: PaymentKind.EXTENSION,
+      periodYears: input.periodYears,
+      amountNoVat: input.amountNoVat,
+      amountTotal: input.amountTotal,
+      previousExpiresAt: input.previousExpiresAt,
+      newExpiresAt: input.newExpiresAt,
+      contractId: input.contractId
+        ? new Types.ObjectId(input.contractId)
+        : undefined,
+      note: input.note,
+      paidAt: new Date(),
+    });
+  }
+
+  listByClient(clientId: string): Promise<PaymentDocument[]> {
+    return this.payments
+      .find({ clientId })
+      .sort({ createdAt: -1 })
+      .exec();
   }
 }
 

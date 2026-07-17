@@ -279,6 +279,22 @@ export class ContractsService {
     return this.model.find().sort({ createdAt: -1 }).exec();
   }
 
+  /** Prelungește expirarea celui mai recent contract semnat/expirat al clientului. */
+  async extendLatestExpiry(
+    clientId: string,
+    newExpiresAt: Date,
+  ): Promise<ContractDocument | null> {
+    const contracts = await this.list(clientId);
+    const target = contracts.find((c) => {
+      const s = ContractsService.effectiveStatus(c);
+      return s === ContractStatus.SEMNAT || s === ContractStatus.EXPIRAT;
+    });
+    if (!target) return null;
+    target.expiresAt = newExpiresAt;
+    await target.save();
+    return target;
+  }
+
   async getAnyOrFail(id: string): Promise<ContractDocument> {
     const c = await this.model.findById(id).exec();
     if (!c) throw new NotFoundException('Contract inexistent');

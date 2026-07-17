@@ -120,7 +120,6 @@ function WorkpointsManager({
   const [editing, setEditing] = useState<Workpoint | 'new' | null>(null);
   const [genOpen, setGenOpen] = useState(false);
 
-  const remaining = profile.workpointsAllowed - workpoints.length;
   const withoutContract = workpoints.filter((w) => !w.hasContract);
 
   const del = useMutation({
@@ -134,14 +133,10 @@ function WorkpointsManager({
       <div className="toolbar">
         <button
           className="btn btn--primary"
-          disabled={remaining <= 0}
           onClick={() => setEditing('new')}
         >
           <Icon name="plus" size={17} /> Adaugă punct de lucru
         </button>
-        <span className="badge badge--gray">
-          {workpoints.length} / {profile.workpointsAllowed} puncte
-        </span>
         <div className="spacer" />
         <button
           className="btn btn--ghost"

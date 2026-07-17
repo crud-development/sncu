@@ -64,12 +64,8 @@ services:
         sync: false
       - key: MAIL_FROM
         value: BioEcoLab <noreply@bioecolab.ro>
-      # Prețuri (lei, fără TVA)
+      # Prețuri (lei, fără TVA) — preț fix anual
       - key: PRICE_BASE
         value: "330"
-      - key: PRICE_EXTRA_WORKPOINT
-        value: "49.49"
-      - key: INCLUDED_WORKPOINTS
-        value: "3"
       - key: VAT_RATE
-        value: "0.19"
+        value: "0.21"
