@@ -106,7 +106,7 @@ export function Inregistrare() {
         <div className="card">
           <h1 className="auth__title">Plată</h1>
           <p className="auth__sub">
-            Contract cadru anual — <strong>{formatLei(intent.amount)}</strong> (TVA inclus)
+            Abonament anual — <strong>{formatLei(intent.amount)}</strong> (TVA inclus) / an
           </p>
           {intent.mock ? (
             <MockPay intent={intent} onDone={() => setStep('done')} />
@@ -130,7 +130,7 @@ export function Inregistrare() {
     <Shell wide>
       <div className="card">
         <h1 className="auth__title">Generează contractul</h1>
-        <p className="auth__sub">Contract cadru anual — preluare SNCU</p>
+        <p className="auth__sub">Abonament anual — preluare SNCU</p>
         {error && <div className="alert alert--error">{error}</div>}
 
         <form onSubmit={handleSubmit(onSubmit)}>
@@ -196,7 +196,7 @@ export function Inregistrare() {
             <strong>Rezumat:</strong>{' '}
             {pricing ? (
               <>
-                Cont anual · {formatLei(noVat)} + TVA ·{' '}
+                Cont anual (abonament) · {formatLei(noVat)} + TVA ·{' '}
                 <strong>Total {formatLei(total)}</strong> / an
               </>
             ) : (

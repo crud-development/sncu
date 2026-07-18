@@ -9,6 +9,13 @@ export class PendingRegistration {
   @Prop({ required: true, unique: true, index: true })
   paymentIntentId: string;
 
+  /** Stripe Subscription (abonament anual). */
+  @Prop({ index: true })
+  subscriptionId?: string;
+
+  @Prop({ index: true })
+  customerId?: string;
+
   @Prop({ type: Object, required: true })
   data: Record<string, unknown>;
 

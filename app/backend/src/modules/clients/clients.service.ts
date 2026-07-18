@@ -25,6 +25,16 @@ export class ClientsService {
     return this.model.findOne({ activationToken: token }).exec();
   }
 
+  findByStripeCustomerId(customerId: string): Promise<ClientDocument | null> {
+    return this.model.findOne({ stripeCustomerId: customerId }).exec();
+  }
+
+  findByStripeSubscriptionId(
+    subscriptionId: string,
+  ): Promise<ClientDocument | null> {
+    return this.model.findOne({ stripeSubscriptionId: subscriptionId }).exec();
+  }
+
   async getOrFail(id: string): Promise<ClientDocument> {
     const doc = await this.findById(id);
     if (!doc) {

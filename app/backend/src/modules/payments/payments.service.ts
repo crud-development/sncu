@@ -13,6 +13,7 @@ import { AuthService } from '../auth/auth.service';
 import { RegisterDto } from '../auth/dto/auth.dto';
 import { OblioService } from '../invoicing/oblio.service';
 import { MailService } from '../mail/mail.service';
+import { ContractsService } from '../contracts/contracts.service';
 import {
   PendingRegistration,
   PendingRegistrationDocument,
@@ -28,6 +29,7 @@ import {
 export class PaymentsService {
   private readonly logger = new Logger(PaymentsService.name);
   private readonly stripe: Stripe | null;
+  private cachedYearlyPriceId: string | null = null;
 
   constructor(
     @InjectModel(PendingRegistration.name)
@@ -39,6 +41,7 @@ export class PaymentsService {
     private readonly auth: AuthService,
     private readonly oblio: OblioService,
     private readonly mail: MailService,
+    private readonly contracts: ContractsService,
   ) {
     const key = this.config.get<string>('stripe.secretKey');
     this.stripe = key ? new Stripe(key) : null;
@@ -78,7 +81,10 @@ export class PaymentsService {
     return { noVat, vat: round2(total - noVat), total };
   }
 
-  /** Pas 1: creează PaymentIntent (sau mock) și reține datele de înregistrare. */
+  /**
+   * Pas 1: creează un abonament Stripe anual (sau mock) și reține datele de înregistrare.
+   * Frontend-ul confirmă plata primului invoice prin Payment Element (clientSecret).
+   */
   async createIntent(dto: RegisterDto) {
     if (await this.clients.findByEmail(dto.email)) {
       throw new BadRequestException('Există deja un cont cu acest email');
@@ -87,23 +93,55 @@ export class PaymentsService {
 
     let paymentIntentId: string;
     let clientSecret: string;
+    let subscriptionId: string | undefined;
+    let customerId: string | undefined;
 
     if (this.stripe) {
-      const pi = await this.stripe.paymentIntents.create({
-        amount: Math.round(total * 100),
-        currency: 'ron',
-        metadata: { email: dto.email, companyName: dto.companyName },
-        automatic_payment_methods: { enabled: true },
+      const priceId = await this.resolveYearlyPriceId();
+
+      const customer = await this.stripe.customers.create({
+        email: dto.email,
+        name: dto.companyName,
+        metadata: {
+          cui: dto.cui,
+          companyName: dto.companyName,
+        },
       });
-      paymentIntentId = pi.id;
-      clientSecret = pi.client_secret!;
+      customerId = customer.id;
+
+      const subscription = await this.stripe.subscriptions.create({
+        customer: customer.id,
+        items: [{ price: priceId }],
+        payment_behavior: 'default_incomplete',
+        payment_settings: {
+          save_default_payment_method: 'on_subscription',
+          payment_method_types: ['card'],
+        },
+        expand: ['latest_invoice.payment_intent'],
+        metadata: {
+          email: dto.email,
+          companyName: dto.companyName,
+          cui: dto.cui,
+          sncu: 'registration',
+        },
+      });
+      subscriptionId = subscription.id;
+
+      const { paymentIntentId: piId, clientSecret: secret } =
+        this.extractInvoicePaymentIntent(subscription.latest_invoice);
+      paymentIntentId = piId;
+      clientSecret = secret;
     } else {
       paymentIntentId = 'pi_mock_' + randomBytes(8).toString('hex');
       clientSecret = paymentIntentId + '_secret_mock';
+      subscriptionId = 'sub_mock_' + randomBytes(6).toString('hex');
+      customerId = 'cus_mock_' + randomBytes(6).toString('hex');
     }
 
     await this.pending.create({
       paymentIntentId,
+      subscriptionId,
+      customerId,
       data: dto as unknown as Record<string, unknown>,
       amountNoVat: noVat,
       amountTotal: total,
@@ -135,10 +173,15 @@ export class PaymentsService {
     const dto = pending.data as unknown as RegisterDto;
 
     try {
-      // Creează contul inactiv + trimite emailul de activare.
-      await this.auth.registerClient(dto);
+      const client = await this.auth.registerClient(dto);
 
-      // Emite factura prin Oblio (sau mock) și o trimite pe email.
+      if (pending.customerId || pending.subscriptionId) {
+        await this.clients.updateProfile(String(client._id), {
+          stripeCustomerId: pending.customerId,
+          stripeSubscriptionId: pending.subscriptionId,
+        });
+      }
+
       const vat = round2(pending.amountTotal - pending.amountNoVat);
       const invoice = await this.oblio.issueInvoice({
         companyName: dto.companyName,
@@ -156,7 +199,6 @@ export class PaymentsService {
         )
         .catch(() => undefined);
     } catch (err) {
-      // La eșec, permite reluarea.
       await this.pending
         .updateOne({ paymentIntentId }, { $set: { completed: false } })
         .exec();
@@ -166,17 +208,38 @@ export class PaymentsService {
     return { ok: true, email: dto.email };
   }
 
-  /** Webhook Stripe — verifică semnătura și declanșează provisioning. */
+  /**
+   * Webhook Stripe — abonament anual:
+   * - invoice.payment_succeeded (subscription_create) → provisioning cont
+   * - invoice.payment_succeeded (subscription_cycle) → reînnoire
+   * - payment_intent.succeeded → fallback idempotent pentru primul plată
+   */
   async handleWebhook(rawBody: Buffer, signature: string) {
     if (!this.stripe) {
       throw new BadRequestException('Stripe neconfigurat.');
     }
     const secret = this.config.get<string>('stripe.webhookSecret');
-    const event = this.stripe.webhooks.constructEvent(rawBody, signature, secret!);
-    if (event.type === 'payment_intent.succeeded') {
+    const event = this.stripe.webhooks.constructEvent(
+      rawBody,
+      signature,
+      secret!,
+    );
+
+    if (event.type === 'invoice.payment_succeeded') {
+      const invoice = event.data.object as Stripe.Invoice;
+      const reason = invoice.billing_reason;
+      if (reason === 'subscription_create') {
+        const piId = this.invoicePaymentIntentId(invoice);
+        if (piId) await this.provision(piId);
+      } else if (reason === 'subscription_cycle') {
+        await this.handleSubscriptionRenewal(invoice);
+      }
+    } else if (event.type === 'payment_intent.succeeded') {
+      // Fallback: confirmPayment din frontend poate ajunge aici înainte de invoice.*.
       const pi = event.data.object as Stripe.PaymentIntent;
       await this.provision(pi.id);
     }
+
     return { received: true };
   }
 
@@ -223,6 +286,172 @@ export class PaymentsService {
       .find({ clientId })
       .sort({ createdAt: -1 })
       .exec();
+  }
+
+  // ─── Stripe helpers ───────────────────────────────────────────────────────
+
+  /**
+   * Price ID pentru abonamentul anual. Preferă STRIPE_PRICE_ID; altfel creează /
+   * reutilizează un Price recurring yearly cu suma curentă (TVA inclus).
+   */
+  private async resolveYearlyPriceId(): Promise<string> {
+    if (!this.stripe) throw new BadRequestException('Stripe neconfigurat.');
+
+    const configured = this.config.get<string>('stripe.priceId')?.trim();
+    if (configured) return configured;
+
+    if (this.cachedYearlyPriceId) return this.cachedYearlyPriceId;
+
+    const { total } = this.computeAmount();
+    const unitAmount = Math.round(total * 100);
+
+    const prices = await this.stripe.prices.list({
+      active: true,
+      type: 'recurring',
+      currency: 'ron',
+      limit: 100,
+    });
+    const existing = prices.data.find(
+      (p) =>
+        p.recurring?.interval === 'year' &&
+        p.unit_amount === unitAmount &&
+        p.metadata?.sncu === 'annual',
+    );
+    if (existing) {
+      this.cachedYearlyPriceId = existing.id;
+      return existing.id;
+    }
+
+    const product = await this.stripe.products.create({
+      name: 'Abonament SNCU anual',
+      description: 'Contract cadru anual — colectare / transport / neutralizare SNCU',
+      metadata: { sncu: 'annual' },
+    });
+    const price = await this.stripe.prices.create({
+      product: product.id,
+      currency: 'ron',
+      unit_amount: unitAmount,
+      recurring: { interval: 'year' },
+      metadata: { sncu: 'annual' },
+    });
+    this.logger.log(
+      `Stripe Price anual creat automat: ${price.id} (${total} RON/an). Setează STRIPE_PRICE_ID în producție.`,
+    );
+    this.cachedYearlyPriceId = price.id;
+    return price.id;
+  }
+
+  private extractInvoicePaymentIntent(latestInvoice: unknown): {
+    paymentIntentId: string;
+    clientSecret: string;
+  } {
+    const invoice = latestInvoice as Stripe.Invoice | string | null;
+    if (!invoice || typeof invoice === 'string') {
+      throw new BadRequestException(
+        'Abonamentul Stripe nu a returnat invoice-ul inițial.',
+      );
+    }
+    const pi = (invoice as Stripe.Invoice & {
+      payment_intent?: string | Stripe.PaymentIntent | null;
+    }).payment_intent;
+    if (!pi || typeof pi === 'string') {
+      throw new BadRequestException(
+        'Abonamentul Stripe nu a returnat PaymentIntent pentru plata inițială.',
+      );
+    }
+    if (!pi.client_secret) {
+      throw new BadRequestException('PaymentIntent fără client_secret.');
+    }
+    return { paymentIntentId: pi.id, clientSecret: pi.client_secret };
+  }
+
+  private invoicePaymentIntentId(invoice: Stripe.Invoice): string | null {
+    const pi = (invoice as Stripe.Invoice & {
+      payment_intent?: string | Stripe.PaymentIntent | null;
+    }).payment_intent;
+    if (!pi) return null;
+    return typeof pi === 'string' ? pi : pi.id;
+  }
+
+  /** Reînnoire anuală: prelungește expirarea + factură Oblio. */
+  private async handleSubscriptionRenewal(invoice: Stripe.Invoice) {
+    const subscriptionRef =
+      typeof invoice.subscription === 'string'
+        ? invoice.subscription
+        : invoice.subscription?.id;
+    const customerRef =
+      typeof invoice.customer === 'string'
+        ? invoice.customer
+        : invoice.customer?.id;
+
+    let client =
+      (subscriptionRef
+        ? await this.clients.findByStripeSubscriptionId(subscriptionRef)
+        : null) ??
+      (customerRef
+        ? await this.clients.findByStripeCustomerId(customerRef)
+        : null);
+
+    if (!client) {
+      this.logger.warn(
+        `Reînnoire Stripe fără client local (sub=${subscriptionRef}, cus=${customerRef}).`,
+      );
+      return;
+    }
+
+    const now = new Date();
+    const previousExpiresAt = client.contractExpiresAt
+      ? new Date(client.contractExpiresAt)
+      : undefined;
+    const base =
+      previousExpiresAt && previousExpiresAt > now ? previousExpiresAt : now;
+    const newExpiresAt = new Date(base);
+    newExpiresAt.setFullYear(newExpiresAt.getFullYear() + 1);
+
+    const { noVat, total, vat } = this.computeAmount();
+
+    await this.contracts
+      .extendLatestExpiry(String(client._id), newExpiresAt)
+      .catch((err) =>
+        this.logger.warn(`Nu s-a putut prelungi contractul: ${err}`),
+      );
+
+    await this.clients.updateProfile(String(client._id), {
+      contractExpiresAt: newExpiresAt,
+    });
+
+    await this.payments.create({
+      clientId: client._id,
+      type: PaymentRecordType.CARD,
+      kind: PaymentKind.EXTENSION,
+      periodYears: 1,
+      amountNoVat: noVat,
+      amountTotal: total,
+      previousExpiresAt,
+      newExpiresAt,
+      note: `Reînnoire abonament Stripe ${invoice.id}`,
+      paidAt: new Date(),
+    });
+
+    try {
+      const issued = await this.oblio.issueInvoice({
+        companyName: client.companyName,
+        cui: client.cui,
+        noVat,
+        vat,
+        total,
+      });
+      await this.mail
+        .sendInvoice(
+          client.email,
+          `${issued.series}-${issued.number}`,
+          issued.total,
+          issued.pdf,
+        )
+        .catch(() => undefined);
+    } catch (err) {
+      this.logger.error(`Factură Oblio la reînnoire eșuată: ${err}`);
+    }
   }
 }
 

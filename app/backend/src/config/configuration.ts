@@ -21,6 +21,8 @@ export default () => ({
     secretKey: process.env.STRIPE_SECRET_KEY ?? '',
     publishableKey: process.env.STRIPE_PUBLISHABLE_KEY ?? '',
     webhookSecret: process.env.STRIPE_WEBHOOK_SECRET ?? '',
+    /** Price ID Stripe pentru abonamentul anual (RON, recurring yearly). Opțional — se creează automat dacă lipsește. */
+    priceId: process.env.STRIPE_PRICE_ID ?? '',
   },
 
   oblio: {

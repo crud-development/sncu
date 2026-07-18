@@ -53,7 +53,7 @@ function PayForm({ amount, onSuccess }: { amount: number; onSuccess: () => void 
         <PaymentElement />
       </div>
       <button className="btn btn--primary btn--block" disabled={!stripe || busy} onClick={pay}>
-        {busy ? 'Se procesează…' : `Plătește ${amount.toFixed(2)} lei`}
+        {busy ? 'Se procesează…' : `Activează abonamentul · ${amount.toFixed(2)} lei/an`}
       </button>
     </div>
   );

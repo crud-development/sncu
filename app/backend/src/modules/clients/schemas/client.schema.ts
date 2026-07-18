@@ -88,6 +88,13 @@ export class Client {
   @Prop()
   contractExpiresAt?: Date;
 
+  /** Stripe Customer / Subscription (abonament anual Card). */
+  @Prop({ index: true })
+  stripeCustomerId?: string;
+
+  @Prop({ index: true })
+  stripeSubscriptionId?: string;
+
   // ─── Token activare / reset parolă ───
   @Prop({ index: true })
   activationToken?: string;

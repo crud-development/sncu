@@ -3,6 +3,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { ClientsModule } from '../clients/clients.module';
 import { AuthModule } from '../auth/auth.module';
 import { InvoicingModule } from '../invoicing/invoicing.module';
+import { ContractsModule } from '../contracts/contracts.module';
 import {
   PendingRegistration,
   PendingRegistrationSchema,
@@ -20,6 +21,7 @@ import { PaymentsController } from './payments.controller';
     ClientsModule,
     AuthModule,
     InvoicingModule,
+    ContractsModule,
   ],
   controllers: [PaymentsController],
   providers: [PaymentsService],

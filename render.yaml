@@ -44,6 +44,9 @@ services:
         sync: false
       - key: STRIPE_WEBHOOK_SECRET
         sync: false
+      # Price ID abonament anual (recurring yearly RON). Opțional dacă lipsește.
+      - key: STRIPE_PRICE_ID
+        sync: false
       # Oblio
       - key: OBLIO_EMAIL
         sync: false
