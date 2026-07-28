@@ -113,11 +113,23 @@ export class OblioService {
     };
 
     try {
+      // Oblio OAuth cere form-urlencoded (nu JSON) — altfel răspunde invalid_client.
       const auth = await axios.post(
         'https://www.oblio.eu/api/authorize/token',
-        { client_id: o.email, client_secret: o.apiToken },
+        new URLSearchParams({
+          client_id: String(o.email).trim(),
+          client_secret: String(o.apiToken).trim(),
+        }).toString(),
+        {
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        },
       );
       const accessToken = auth.data.access_token;
+      if (!accessToken) {
+        throw new BadRequestException(
+          `Oblio auth: lipsă access_token — ${JSON.stringify(auth.data)}`,
+        );
+      }
 
       const res = await axios.post(
         'https://www.oblio.eu/api/docs/invoice',
@@ -154,25 +166,28 @@ export class OblioService {
         pdf,
       };
     } catch (err: any) {
+      if (err instanceof BadRequestException) throw err;
       const detail = oblioErrorDetail(err);
       this.logger.error(`Eroare Oblio: ${detail}`);
       this.logger.debug(
-        `Payload Oblio (fără secrete): ${JSON.stringify({
-          ...payload,
-          client: { ...payload.client, email: !!payload.client.email },
-        })}`,
+        `Payload Oblio: cif=${payload.cif} series=${payload.seriesName} clientCif=${payload.client.cif} total=${input.total}`,
       );
       throw new BadRequestException(`Oblio: ${detail}`);
     }
   }
 }
 
-/** Normalizează CUI/CIF: spații eliminate; păstrează prefixul RO dacă există. */
+/** Normalizează CUI/CIF: spații eliminate; păstrează/adaugă RO pentru firme. */
 function normalizeCif(raw: string): string {
-  return String(raw ?? '')
+  let cif = String(raw ?? '')
     .trim()
     .replace(/\s+/g, '')
     .toUpperCase();
+  // Oblio/ANAF așteaptă adesea prefixul RO pentru plătitori de TVA.
+  if (cif && !cif.startsWith('RO') && /^\d{2,10}$/.test(cif)) {
+    cif = `RO${cif}`;
+  }
+  return cif;
 }
 
 function oblioErrorDetail(err: any): string {
