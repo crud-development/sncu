@@ -17,12 +17,9 @@ export interface InvoiceInput {
   noVat: number;
   vat: number;
   total: number;
-  /** Ani / cantitate pe linie (default 1). */
   quantity?: number;
-  /** Preț unitar fără TVA (default = noVat / quantity). */
   unitPriceNoVat?: number;
   productName?: string;
-  /** Date client (opțional — Oblio autocomplete pe CIF dacă lipsesc). */
   email?: string;
   phone?: string;
   address?: string;
@@ -33,18 +30,20 @@ export interface InvoiceInput {
 }
 
 /**
- * Facturare prin Oblio. Dacă lipsesc credențialele, rulează în mod mock
- * (emite o factură simulată) astfel încât fluxul de plată să meargă local.
+ * Facturare Oblio — auth aliniat cu SDK-ul oficial (@obliosoftware/oblioapi):
+ * POST /api/authorize/token cu JSON { client_id, client_secret, grant_type }.
+ * @see https://www.oblio.eu/api#docs_issue
  */
 @Injectable()
 export class OblioService {
   private readonly logger = new Logger(OblioService.name);
+  private cachedToken: { value: string; expiresAt: number } | null = null;
 
   constructor(private readonly config: ConfigService) {}
 
   get isConfigured(): boolean {
-    const o = this.config.get('oblio');
-    return Boolean(o?.email && o?.apiToken && o?.cif && o?.invoiceSeries);
+    const { email, apiToken, cif, invoiceSeries } = this.credentials();
+    return Boolean(email && apiToken && cif && invoiceSeries);
   }
 
   async issueInvoice(input: InvoiceInput): Promise<InvoiceResult> {
@@ -55,7 +54,7 @@ export class OblioService {
       (this.config.get<number>('pricing.vatRate') ?? 0.21) * 100,
     );
     const vatName =
-      this.config.get<string>('oblio.vatName')?.trim() || 'Normala';
+      clean(this.config.get<string>('oblio.vatName')) || 'Normala';
     const productName =
       input.productName ?? 'Abonament anual gestionare SNCU';
 
@@ -67,8 +66,8 @@ export class OblioService {
       return { series: 'MOCK', number, total: input.total, mock: true };
     }
 
-    const o = this.config.get('oblio');
-    const issuerCif = normalizeCif(o.cif);
+    const { cif: issuerCifRaw, invoiceSeries } = this.credentials();
+    const issuerCif = normalizeCif(issuerCifRaw);
     const clientCif = normalizeCif(input.cui);
 
     const payload = {
@@ -84,13 +83,12 @@ export class OblioService {
         email: input.email ?? '',
         phone: input.phone ?? '',
         contact: input.contactPerson ?? '',
-        vatPayer: clientCif.toUpperCase().startsWith('RO') ? 1 : 0,
-        // Completează automat datele firmei din ANAF când CIF-ul e valid.
+        vatPayer: clientCif.startsWith('RO') ? 1 : 0,
         autocomplete: 1,
         save: 1,
       },
       issueDate: new Date().toISOString().slice(0, 10),
-      seriesName: String(o.invoiceSeries).trim(),
+      seriesName: invoiceSeries,
       language: 'RO',
       precision: 2,
       currency: 'RON',
@@ -103,7 +101,6 @@ export class OblioService {
           currency: 'RON',
           vatName,
           vatPercentage,
-          // Prețul nostru e fără TVA.
           vatIncluded: 0,
           quantity,
           productType: 'Serviciu',
@@ -113,28 +110,18 @@ export class OblioService {
     };
 
     try {
-      // Oblio OAuth cere form-urlencoded (nu JSON) — altfel răspunde invalid_client.
-      const auth = await axios.post(
-        'https://www.oblio.eu/api/authorize/token',
-        new URLSearchParams({
-          client_id: String(o.email).trim(),
-          client_secret: String(o.apiToken).trim(),
-        }).toString(),
-        {
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        },
-      );
-      const accessToken = auth.data.access_token;
-      if (!accessToken) {
-        throw new BadRequestException(
-          `Oblio auth: lipsă access_token — ${JSON.stringify(auth.data)}`,
-        );
-      }
+      const accessToken = await this.getAccessToken();
 
       const res = await axios.post(
         'https://www.oblio.eu/api/docs/invoice',
         payload,
-        { headers: { Authorization: `Bearer ${accessToken}` } },
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+          },
+        },
       );
 
       const data = res.data?.data;
@@ -170,20 +157,90 @@ export class OblioService {
       const detail = oblioErrorDetail(err);
       this.logger.error(`Eroare Oblio: ${detail}`);
       this.logger.debug(
-        `Payload Oblio: cif=${payload.cif} series=${payload.seriesName} clientCif=${payload.client.cif} total=${input.total}`,
+        `Payload Oblio: cif=${payload.cif} series=${payload.seriesName} clientCif=${payload.client.cif}`,
       );
       throw new BadRequestException(`Oblio: ${detail}`);
     }
   }
+
+  /**
+   * Token OAuth — exact ca SDK-ul oficial OblioApiJs:
+   * JSON + grant_type=client_credentials.
+   */
+  private async getAccessToken(): Promise<string> {
+    if (this.cachedToken && this.cachedToken.expiresAt > Date.now() + 30_000) {
+      return this.cachedToken.value;
+    }
+
+    const { email, apiToken } = this.credentials();
+    if (!email || !apiToken) {
+      throw new BadRequestException(
+        'Oblio: OBLIO_EMAIL / OBLIO_API_TOKEN lipsă. Tokenul e în Oblio → Setări → Date cont.',
+      );
+    }
+
+    try {
+      const res = await axios.post(
+        'https://www.oblio.eu/api/authorize/token',
+        {
+          client_id: email,
+          client_secret: apiToken,
+          grant_type: 'client_credentials',
+        },
+        {
+          headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+          },
+          validateStatus: () => true,
+        },
+      );
+
+      if (res.status < 200 || res.status >= 300 || !res.data?.access_token) {
+        const detail = oblioErrorDetail({ response: res });
+        this.logger.error(
+          `Oblio auth eșuat (HTTP ${res.status}) pentru client_id=${email}, secretLen=${apiToken.length}: ${detail}`,
+        );
+        throw new BadRequestException(
+          `Oblio auth (${detail}). Verifică OBLIO_EMAIL (emailul de login Oblio) și OBLIO_API_TOKEN (Setări → Date cont; se regenerează la reset parolă).`,
+        );
+      }
+
+      const expiresIn = Number(res.data.expires_in) || 3600;
+      this.cachedToken = {
+        value: res.data.access_token,
+        expiresAt: Date.now() + expiresIn * 1000,
+      };
+      return this.cachedToken.value;
+    } catch (err: any) {
+      if (err instanceof BadRequestException) throw err;
+      const detail = oblioErrorDetail(err);
+      this.logger.error(`Oblio auth network/error: ${detail}`);
+      throw new BadRequestException(`Oblio auth: ${detail}`);
+    }
+  }
+
+  private credentials() {
+    const o = this.config.get('oblio') ?? {};
+    return {
+      email: clean(o.email),
+      apiToken: clean(o.apiToken),
+      cif: clean(o.cif),
+      invoiceSeries: clean(o.invoiceSeries),
+    };
+  }
 }
 
-/** Normalizează CUI/CIF: spații eliminate; păstrează/adaugă RO pentru firme. */
-function normalizeCif(raw: string): string {
-  let cif = String(raw ?? '')
+/** Trim + elimină ghilimele puse greșit în env (Render / .env). */
+function clean(raw: unknown): string {
+  return String(raw ?? '')
     .trim()
-    .replace(/\s+/g, '')
-    .toUpperCase();
-  // Oblio/ANAF așteaptă adesea prefixul RO pentru plătitori de TVA.
+    .replace(/^["']+|["']+$/g, '')
+    .trim();
+}
+
+function normalizeCif(raw: string): string {
+  let cif = clean(raw).toUpperCase().replace(/\s+/g, '');
   if (cif && !cif.startsWith('RO') && /^\d{2,10}$/.test(cif)) {
     cif = `RO${cif}`;
   }
@@ -196,8 +253,9 @@ function oblioErrorDetail(err: any): string {
   if (typeof data === 'string') return data;
   const msg =
     data.statusMessage ||
-    data.message ||
+    data.error_description ||
     data.error ||
+    data.message ||
     (Array.isArray(data.errors) ? data.errors.join('; ') : null);
   if (msg) return String(msg);
   try {
