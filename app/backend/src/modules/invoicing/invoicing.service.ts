@@ -22,6 +22,12 @@ export interface IssueInvoiceParams {
   paymentId?: string;
   sendEmail?: boolean;
   productName?: string;
+  phone?: string;
+  address?: string;
+  city?: string;
+  judet?: string;
+  regCom?: string;
+  contactPerson?: string;
 }
 
 @Injectable()
@@ -80,6 +86,13 @@ export class InvoicingService {
         quantity: periodYears,
         productName,
         unitPriceNoVat: this.unitPriceNoVat(params.amountNoVat, periodYears),
+        email: params.email,
+        phone: params.phone,
+        address: params.address,
+        city: params.city,
+        judet: params.judet,
+        regCom: params.regCom,
+        contactPerson: params.contactPerson,
       });
 
       draft.status = InvoiceStatus.ISSUED;
@@ -111,7 +124,9 @@ export class InvoicingService {
     } catch (err: any) {
       draft.status = InvoiceStatus.FAILED;
       draft.error =
-        err?.response?.data?.statusMessage ?? err?.message ?? String(err);
+        err?.response?.data?.statusMessage ??
+        err?.message ??
+        String(err);
       await draft.save();
       this.logger.error(`Emitere factură eșuată (${draft.id}): ${draft.error}`);
       if (opts?.swallowError) return draft;

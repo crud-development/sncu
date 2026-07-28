@@ -30,6 +30,8 @@ export default () => ({
     apiToken: process.env.OBLIO_API_TOKEN ?? '',
     cif: process.env.OBLIO_CIF ?? '',
     invoiceSeries: process.env.OBLIO_INVOICE_SERIES ?? '',
+    /** Numele cotei din nomenclatorul Oblio (trebuie să coincidă cu vatPercentage). */
+    vatName: process.env.OBLIO_VAT_NAME ?? 'Normala',
   },
 
   mail: {

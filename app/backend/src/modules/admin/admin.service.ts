@@ -117,6 +117,14 @@ export class AdminService {
         amountNoVat,
         amountTotal,
         paymentId: payment.id,
+        phone: client.phone,
+        address: client.address,
+        city: client.city,
+        judet: client.judet,
+        regCom: client.regCom,
+        contactPerson: [client.contactFirstName, client.contactLastName]
+          .filter(Boolean)
+          .join(' '),
         productName:
           periodYears === 1
             ? 'Abonament anual gestionare SNCU (OP)'

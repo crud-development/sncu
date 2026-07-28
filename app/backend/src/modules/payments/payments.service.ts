@@ -191,6 +191,11 @@ export class PaymentsService {
           periodYears: 1,
           amountNoVat: pending.amountNoVat,
           amountTotal: pending.amountTotal,
+          phone: dto.phone,
+          address: dto.address,
+          city: dto.city,
+          judet: dto.judet,
+          contactPerson: dto.contactPerson,
         },
         { swallowError: true },
       );
@@ -439,6 +444,14 @@ export class PaymentsService {
         periodYears: 1,
         amountNoVat: noVat,
         amountTotal: total,
+        phone: client.phone,
+        address: client.address,
+        city: client.city,
+        judet: client.judet,
+        regCom: client.regCom,
+        contactPerson: [client.contactFirstName, client.contactLastName]
+          .filter(Boolean)
+          .join(' '),
       },
       { swallowError: true },
     );
