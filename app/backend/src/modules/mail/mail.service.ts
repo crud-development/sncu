@@ -99,9 +99,9 @@ export class MailService {
       subject: `Factura ${invoiceNo} — BioEcoLab`,
       html: this.layout(
         'Factura ta',
-        `<p>Îți mulțumim! Plata a fost confirmată.</p>
+        `<p>Îți mulțumim!</p>
          <p>Am emis factura <strong>${invoiceNo}</strong> în valoare de <strong>${total.toFixed(2)} lei</strong>.</p>
-         <p>Vei primi separat și emailul de activare a contului.</p>`,
+         <p>Găsești factura atașată acestui email (dacă e disponibilă) sau o poți descărca din contul Oblio.</p>`,
       ),
       attachments: pdf
         ? [{ filename: `${invoiceNo}.pdf`, content: pdf, contentType: 'application/pdf' }]

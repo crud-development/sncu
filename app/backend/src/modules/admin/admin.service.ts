@@ -7,6 +7,8 @@ import { ContractsService } from '../contracts/contracts.service';
 import { OrdersService } from '../orders/orders.service';
 import { WorkpointsService } from '../workpoints/workpoints.service';
 import { PaymentsService } from '../payments/payments.service';
+import { InvoicingService } from '../invoicing/invoicing.service';
+import { InvoiceKind } from '../invoicing/schemas/invoice.schema';
 import { PaymentType } from '../clients/schemas/client.schema';
 import {
   ContractDocument,
@@ -21,6 +23,7 @@ export class AdminService {
     private readonly orders: OrdersService,
     private readonly workpoints: WorkpointsService,
     private readonly payments: PaymentsService,
+    private readonly invoicing: InvoicingService,
   ) {}
 
   /** Punctele de lucru ale unui client (pentru formularul de comandă din admin). */
@@ -103,6 +106,25 @@ export class AdminService {
       note: `Prelungire manuală ${periodYears} ${periodYears === 1 ? 'an' : 'ani'}`,
     });
 
+    const invoice = await this.invoicing.issueAndRecord(
+      {
+        clientId,
+        companyName: client.companyName,
+        cui: client.cui,
+        email: client.email,
+        kind: InvoiceKind.EXTENSION,
+        periodYears,
+        amountNoVat,
+        amountTotal,
+        paymentId: payment.id,
+        productName:
+          periodYears === 1
+            ? 'Abonament anual gestionare SNCU (OP)'
+            : `Abonament SNCU — ${periodYears} ani (OP)`,
+      },
+      { swallowError: true },
+    );
+
     return {
       ok: true,
       previousExpiresAt,
@@ -112,6 +134,8 @@ export class AdminService {
       periodYears,
       paymentId: payment.id,
       contractId: contract?.id ?? null,
+      invoiceId: invoice.id,
+      invoiceStatus: invoice.status,
     };
   }
 
@@ -194,6 +218,18 @@ export class AdminService {
       createdAt: (o as any).createdAt,
       estimatedCost: o.estimatedCost,
     }));
+  }
+
+  listInvoices() {
+    return this.invoicing.list();
+  }
+
+  retryInvoice(id: string) {
+    return this.invoicing.retry(id);
+  }
+
+  invoicingStatus() {
+    return { configured: this.invoicing.isConfigured };
   }
 }
 

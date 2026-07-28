@@ -16,6 +16,7 @@ const adminLinks = [
   { to: '/admin/clienti', label: 'Clienți', icon: 'users' },
   { to: '/admin/comenzi', label: 'Comenzi', icon: 'order' },
   { to: '/admin/contracte', label: 'Contracte', icon: 'contract' },
+  { to: '/admin/facturi', label: 'Facturi', icon: 'card' },
   { to: '/admin/setari', label: 'Setări', icon: 'settings' },
 ];
 

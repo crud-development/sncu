@@ -14,6 +14,7 @@ import { Contracte } from './pages/Contracte';
 import { AdminClienti } from './pages/admin/AdminClienti';
 import { AdminComenzi } from './pages/admin/AdminComenzi';
 import { AdminContracte } from './pages/admin/AdminContracte';
+import { AdminFacturi } from './pages/admin/AdminFacturi';
 import { AdminSetari } from './pages/admin/AdminSetari';
 
 export function App() {
@@ -48,6 +49,7 @@ export function App() {
         <Route path="/admin/clienti" element={<AdminClienti />} />
         <Route path="/admin/comenzi" element={<AdminComenzi />} />
         <Route path="/admin/contracte" element={<AdminContracte />} />
+        <Route path="/admin/facturi" element={<AdminFacturi />} />
         <Route path="/admin/setari" element={<AdminSetari />} />
       </Route>
 

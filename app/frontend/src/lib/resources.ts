@@ -266,8 +266,38 @@ export const adminExtendContract = (id: string, periodYears: number) =>
       periodYears: number;
       paymentId: string;
       contractId: string | null;
+      invoiceId?: string;
+      invoiceStatus?: string;
     }>(`/admin/clients/${id}/extend-contract`, { periodYears })
     .then((r) => r.data);
+
+export interface AdminInvoice {
+  id: string;
+  clientId?: string;
+  companyName: string;
+  cui: string;
+  email: string;
+  kind: 'registration' | 'extension';
+  status: 'issued' | 'failed';
+  periodYears: number;
+  amountNoVat: number;
+  amountVat: number;
+  amountTotal: number;
+  series?: string;
+  number?: string;
+  link?: string;
+  mock: boolean;
+  error?: string;
+  emailedAt?: string;
+  createdAt: string;
+}
+
+export const adminListInvoices = () =>
+  api.get<AdminInvoice[]>('/admin/invoices').then((r) => r.data);
+export const adminInvoicingStatus = () =>
+  api.get<{ configured: boolean }>('/admin/invoices/status').then((r) => r.data);
+export const adminRetryInvoice = (id: string) =>
+  api.post(`/admin/invoices/${id}/retry`).then((r) => r.data);
 
 export const adminListContracts = () =>
   api.get<AdminContract[]>('/admin/contracts').then((r) => r.data);

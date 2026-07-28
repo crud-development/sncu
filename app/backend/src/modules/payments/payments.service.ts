@@ -11,8 +11,8 @@ import Stripe from 'stripe';
 import { ClientsService } from '../clients/clients.service';
 import { AuthService } from '../auth/auth.service';
 import { RegisterDto } from '../auth/dto/auth.dto';
-import { OblioService } from '../invoicing/oblio.service';
-import { MailService } from '../mail/mail.service';
+import { InvoicingService } from '../invoicing/invoicing.service';
+import { InvoiceKind } from '../invoicing/schemas/invoice.schema';
 import { ContractsService } from '../contracts/contracts.service';
 import {
   PendingRegistration,
@@ -39,8 +39,7 @@ export class PaymentsService {
     private readonly config: ConfigService,
     private readonly clients: ClientsService,
     private readonly auth: AuthService,
-    private readonly oblio: OblioService,
-    private readonly mail: MailService,
+    private readonly invoicing: InvoicingService,
     private readonly contracts: ContractsService,
   ) {
     const key = this.config.get<string>('stripe.secretKey');
@@ -182,22 +181,19 @@ export class PaymentsService {
         });
       }
 
-      const vat = round2(pending.amountTotal - pending.amountNoVat);
-      const invoice = await this.oblio.issueInvoice({
-        companyName: dto.companyName,
-        cui: dto.cui,
-        noVat: pending.amountNoVat,
-        vat,
-        total: pending.amountTotal,
-      });
-      await this.mail
-        .sendInvoice(
-          dto.email,
-          `${invoice.series}-${invoice.number}`,
-          invoice.total,
-          invoice.pdf,
-        )
-        .catch(() => undefined);
+      await this.invoicing.issueAndRecord(
+        {
+          clientId: String(client._id),
+          companyName: dto.companyName,
+          cui: dto.cui,
+          email: dto.email,
+          kind: InvoiceKind.REGISTRATION,
+          periodYears: 1,
+          amountNoVat: pending.amountNoVat,
+          amountTotal: pending.amountTotal,
+        },
+        { swallowError: true },
+      );
     } catch (err) {
       await this.pending
         .updateOne({ paymentIntentId }, { $set: { completed: false } })
@@ -408,7 +404,7 @@ export class PaymentsService {
     const newExpiresAt = new Date(base);
     newExpiresAt.setFullYear(newExpiresAt.getFullYear() + 1);
 
-    const { noVat, total, vat } = this.computeAmount();
+    const { noVat, total } = this.computeAmount();
 
     await this.contracts
       .extendLatestExpiry(String(client._id), newExpiresAt)
@@ -433,25 +429,19 @@ export class PaymentsService {
       paidAt: new Date(),
     });
 
-    try {
-      const issued = await this.oblio.issueInvoice({
+    await this.invoicing.issueAndRecord(
+      {
+        clientId: String(client._id),
         companyName: client.companyName,
         cui: client.cui,
-        noVat,
-        vat,
-        total,
-      });
-      await this.mail
-        .sendInvoice(
-          client.email,
-          `${issued.series}-${issued.number}`,
-          issued.total,
-          issued.pdf,
-        )
-        .catch(() => undefined);
-    } catch (err) {
-      this.logger.error(`Factură Oblio la reînnoire eșuată: ${err}`);
-    }
+        email: client.email,
+        kind: InvoiceKind.EXTENSION,
+        periodYears: 1,
+        amountNoVat: noVat,
+        amountTotal: total,
+      },
+      { swallowError: true },
+    );
   }
 }
 

@@ -17,6 +17,11 @@ export interface InvoiceInput {
   noVat: number;
   vat: number;
   total: number;
+  /** Ani / cantitate pe linie (default 1). */
+  quantity?: number;
+  /** Preț unitar fără TVA (default = noVat / quantity). */
+  unitPriceNoVat?: number;
+  productName?: string;
 }
 
 /**
@@ -29,13 +34,22 @@ export class OblioService {
 
   constructor(private readonly config: ConfigService) {}
 
-  private get configured(): boolean {
+  get isConfigured(): boolean {
     const o = this.config.get('oblio');
     return Boolean(o?.email && o?.apiToken && o?.cif);
   }
 
   async issueInvoice(input: InvoiceInput): Promise<InvoiceResult> {
-    if (!this.configured) {
+    const quantity = Math.max(1, input.quantity ?? 1);
+    const unitPrice =
+      input.unitPriceNoVat ?? round2(input.noVat / quantity);
+    const vatPercentage = Math.round(
+      (this.config.get<number>('pricing.vatRate') ?? 0.21) * 100,
+    );
+    const productName =
+      input.productName ?? 'Abonament anual gestionare SNCU';
+
+    if (!this.isConfigured) {
       const number = String(Math.floor(1000 + Math.random() * 9000));
       this.logger.warn(
         `Oblio neconfigurat — factură MOCK ${input.cui}: total ${input.total} lei (serie MOCK nr ${number}).`,
@@ -45,14 +59,12 @@ export class OblioService {
 
     try {
       const o = this.config.get('oblio');
-      // 1. Autentificare (token de acces).
       const auth = await axios.post(
         'https://www.oblio.eu/api/authorize/token',
         { client_id: o.email, client_secret: o.apiToken },
       );
       const accessToken = auth.data.access_token;
 
-      // 2. Emitere factură.
       const res = await axios.post(
         'https://www.oblio.eu/api/docs/invoice',
         {
@@ -62,12 +74,12 @@ export class OblioService {
           issueDate: new Date().toISOString().slice(0, 10),
           products: [
             {
-              name: 'Contract cadru anual gestionare SNCU',
-              price: input.noVat,
+              name: productName,
+              price: unitPrice,
               measuringUnit: 'buc',
-              quantity: 1,
+              quantity,
               vatName: 'Normala',
-              vatPercentage: 19,
+              vatPercentage,
             },
           ],
         },
@@ -76,7 +88,6 @@ export class OblioService {
 
       const data = res.data.data;
 
-      // Preia PDF-ul facturii (pentru atașarea pe email).
       let pdf: Buffer | undefined;
       if (data.link) {
         try {
@@ -105,4 +116,8 @@ export class OblioService {
       throw err;
     }
   }
+}
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
 }

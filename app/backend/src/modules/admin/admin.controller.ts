@@ -171,6 +171,28 @@ export class AdminContractsController {
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(UserRole.ADMIN)
+@Controller('admin/invoices')
+export class AdminInvoicesController {
+  constructor(private readonly admin: AdminService) {}
+
+  @Get()
+  list() {
+    return this.admin.listInvoices();
+  }
+
+  @Get('status')
+  status() {
+    return this.admin.invoicingStatus();
+  }
+
+  @Post(':id/retry')
+  retry(@Param('id') id: string) {
+    return this.admin.retryInvoice(id);
+  }
+}
+
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.ADMIN)
 @Controller('admin/settings')
 export class AdminSettingsController {
   constructor(private readonly settings: SettingsService) {}

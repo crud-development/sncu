@@ -59,19 +59,20 @@ Fără `SMTP_HOST` configurat, `MailService` doar loghează emailurile în conso
 | Settings — serie/numerotare contracte + comenzi, template-uri | ✅ |
 | Comenzi — plasare cu toate câmpurile, statusuri, notificări, PDF, export CSV (US-06/07/08) | ✅ |
 | Panou admin — clienți (+OP, impersonare), comenzi (status, cost), contracte (filtre, anulare, export), setări (secțiunea 4) | ✅ |
-| Payments — Stripe PaymentIntent + webhook, fallback mock; flux cumpărare 2 pași (secțiunea 2) | ✅ |
-| Invoicing — Oblio (real cu credențiale, altfel mock) + email factură | ✅ |
+| Payments — Stripe Subscription anual + webhook, fallback mock | ✅ |
+| Invoicing — Oblio (TVA din env, OP + Stripe, listă/retry admin) | ✅ |
 
 ## Plată (Stripe) + facturare (Oblio)
 
 Fluxul de cumpărare (formularul din landing) funcționează cap-coadă și **fără chei**:
-- Fără `STRIPE_SECRET_KEY` → mod **mock**: formularul afișează un buton „Plătește (simulare)";
+- Fără `STRIPE_SECRET_KEY` → mod **mock**: formularul afișează un buton de plată simulată;
   confirmarea creează contul `inactiv`, emite factură mock prin Oblio și trimite emailurile.
-- Cu chei Stripe → se randează **Stripe Elements** (card real); la succes, webhook-ul
+- Cu chei Stripe → **abonament anual** (Subscription) + Payment Element; la succes, webhook-ul
   (`/api/payments/webhook`) declanșează crearea contului + factura.
-- Cu credențiale Oblio → factura se emite real și se atașează pe email.
+- Cu credențiale Oblio → factura se emite real (TVA = `VAT_RATE`) și se atașează pe email.
+- Prelungirile OP din admin emit factură Oblio; eșecurile apar în **Admin → Facturi** (retry).
 
-Preț: `330 + 49.49 × (puncte − 3)` lei + TVA 19% (ex: 5 puncte = 510.49 lei).
+Preț fix anual: `PRICE_BASE` (default 330) lei + TVA `VAT_RATE` (default 0.21) → **399,30 lei/an**.
 Provisioning-ul este idempotent (re-confirmarea nu creează cont dublu).
 
 ## Cont admin
