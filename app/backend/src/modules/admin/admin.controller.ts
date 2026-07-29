@@ -7,6 +7,7 @@ import {
   Post,
   Res,
   UseGuards,
+  Query,
 } from '@nestjs/common';
 import { Response } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -18,6 +19,7 @@ import { OrdersService } from '../orders/orders.service';
 import { ContractsService } from '../contracts/contracts.service';
 import { SettingsService } from '../settings/settings.service';
 import { AdminService } from './admin.service';
+import { PaymentsService } from '../payments/payments.service';
 import {
   AdminCreateClientDto,
   AdminCreateOrderDto,
@@ -207,5 +209,48 @@ export class AdminSettingsController {
     const data: any = { ...dto };
     if (dto.contractStartDate) data.contractStartDate = new Date(dto.contractStartDate);
     return this.settings.update(data);
+  }
+}
+
+
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.ADMIN)
+@Controller('admin/stripe')
+export class AdminStripeController {
+  constructor(private readonly payments: PaymentsService) {}
+
+  @Get('status')
+  status() {
+    return this.payments.stripeStatus();
+  }
+
+  @Get('customers')
+  customers() {
+    return this.payments.stripeListCustomers();
+  }
+
+  @Get('subscriptions')
+  subscriptions() {
+    return this.payments.stripeListSubscriptions();
+  }
+
+  @Get('invoices')
+  invoices() {
+    return this.payments.stripeListInvoices();
+  }
+
+  @Get('promotion-codes')
+  promotionCodes() {
+    return this.payments.stripeListPromotionCodes({});
+  }
+
+  @Post('promotion-codes')
+  promotionCodesCreate(@Body() dto: any) {
+    return this.payments.stripeCreatePromotionCode(dto);
+  }
+
+  @Post('promotion-codes/:id/deactivate')
+  promotionCodesDeactivate(@Param('id') id: string) {
+    return this.payments.stripeDeactivatePromotionCode(id);
   }
 }

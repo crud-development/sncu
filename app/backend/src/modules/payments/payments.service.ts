@@ -88,7 +88,12 @@ export class PaymentsService {
     if (await this.clients.findByEmail(dto.email)) {
       throw new BadRequestException('Există deja un cont cu acest email');
     }
-    const { noVat, total } = this.computeAmount();
+    const { noVat: fullNoVat, total: fullTotal } = this.computeAmount();
+    const vatRate = this.config.get('pricing.vatRate') ?? 0.21;
+
+    // Default (fără reducere) — dacă aplici un cod promo, actualizăm după PaymentIntent.
+    let amountNoVat = fullNoVat;
+    let amountTotal = fullTotal;
 
     let paymentIntentId: string;
     let clientSecret: string;
@@ -98,12 +103,30 @@ export class PaymentsService {
     if (this.stripe) {
       const priceId = await this.resolveYearlyPriceId();
 
+      let discounts: Array<{ promotion_code: string }> | undefined;
+      const promoCodeInput = dto.promotionCode?.trim();
+      if (promoCodeInput) {
+        const promos = await this.stripe.promotionCodes.list({
+          code: promoCodeInput,
+          active: true,
+          limit: 1,
+        });
+        const promo = promos.data?.[0];
+        if (!promo) {
+          throw new BadRequestException(
+            `Cod reducere invalid/expirat: ${promoCodeInput}`,
+          );
+        }
+        discounts = [{ promotion_code: promo.id }];
+      }
+
       const customer = await this.stripe.customers.create({
         email: dto.email,
         name: dto.companyName,
         metadata: {
           cui: dto.cui,
           companyName: dto.companyName,
+          sncu: 'registration',
         },
       });
       customerId = customer.id;
@@ -111,6 +134,7 @@ export class PaymentsService {
       const subscription = await this.stripe.subscriptions.create({
         customer: customer.id,
         items: [{ price: priceId }],
+        discounts,
         payment_behavior: 'default_incomplete',
         payment_settings: {
           save_default_payment_method: 'on_subscription',
@@ -126,10 +150,16 @@ export class PaymentsService {
       });
       subscriptionId = subscription.id;
 
-      const { paymentIntentId: piId, clientSecret: secret } =
-        this.extractInvoicePaymentIntent(subscription.latest_invoice);
+      const {
+        paymentIntentId: piId,
+        clientSecret: secret,
+        amountTotal: piAmount,
+      } = this.extractInvoicePaymentIntent(subscription.latest_invoice);
+
       paymentIntentId = piId;
       clientSecret = secret;
+      amountTotal = piAmount;
+      amountNoVat = round2(amountTotal / (1 + vatRate));
     } else {
       paymentIntentId = 'pi_mock_' + randomBytes(8).toString('hex');
       clientSecret = paymentIntentId + '_secret_mock';
@@ -142,16 +172,17 @@ export class PaymentsService {
       subscriptionId,
       customerId,
       data: dto as unknown as Record<string, unknown>,
-      amountNoVat: noVat,
-      amountTotal: total,
+      amountNoVat,
+      amountTotal,
     });
 
     return {
       clientSecret,
       paymentIntentId,
-      publishableKey: this.config.get<string>('stripe.publishableKey') ?? '',
+      publishableKey:
+        this.config.get<string>('stripe.publishableKey') ?? '',
       mock: this.isMock,
-      amount: total,
+      amount: amountTotal,
     };
   }
 
@@ -289,6 +320,145 @@ export class PaymentsService {
       .exec();
   }
 
+
+  // ─── Admin Stripe (list/create/deactivate promotion codes) ────────
+
+  stripeStatus() {
+    return { configured: !this.isMock, mock: this.isMock };
+  }
+
+  private getStripeOrThrow(): Stripe {
+    if (!this.stripe) {
+      throw new BadRequestException('Stripe neconfigurat.');
+    }
+    return this.stripe;
+  }
+
+  async stripeListCustomers(limit = 50, startingAfter?: string) {
+    const stripe = this.getStripeOrThrow();
+    const res = await stripe.customers.list({
+      limit,
+      ...(startingAfter ? { starting_after: startingAfter } : {}),
+    });
+    return res.data.map((c) => ({
+      id: c.id,
+      email: c.email ?? null,
+      name: c.name ?? null,
+      metadata: c.metadata ?? {},
+      createdAt: c.created,
+      stripeCustomerId: c.id,
+    }));
+  }
+
+  async stripeListSubscriptions(limit = 50) {
+    const stripe = this.getStripeOrThrow();
+    const res = await stripe.subscriptions.list({ limit });
+    return res.data.map((s) => ({
+      id: s.id,
+      customer: typeof s.customer === 'string' ? s.customer : s.customer?.id,
+      status: s.status,
+      currentPeriodEnd: s.current_period_end,
+      cancelAtPeriodEnd: s.cancel_at_period_end,
+      createdAt: s.created,
+    }));
+  }
+
+  async stripeListInvoices(limit = 50) {
+    const stripe = this.getStripeOrThrow();
+    const res = await stripe.invoices.list({ limit });
+    return res.data.map((i) => ({
+      id: i.id,
+      number: i.number ?? null,
+      status: i.status,
+      customer: typeof i.customer === 'string' ? i.customer : i.customer?.id,
+      amountDue: i.amount_due != null ? i.amount_due / 100 : 0,
+      amountPaid: i.amount_paid != null ? i.amount_paid / 100 : 0,
+      billingReason: i.billing_reason ?? null,
+      createdAt: i.created,
+      hostedInvoiceUrl: i.hosted_invoice_url ?? null,
+    }));
+  }
+
+  async stripeListPromotionCodes({
+    limit = 50,
+    code,
+  }: {
+    limit?: number;
+    code?: string;
+  }) {
+    const stripe = this.getStripeOrThrow();
+    const res = await stripe.promotionCodes.list({
+      limit,
+      ...(code ? { code } : {}),
+    });
+    return res.data.map((pc) => ({
+      id: pc.id,
+      code: pc.code,
+      active: pc.active,
+      coupon: pc.coupon,
+      createdAt: pc.created,
+    }));
+  }
+
+  async stripeCreatePromotionCode(input: {
+    code: string;
+    discountType: 'percent' | 'amount';
+    value: number;
+    duration: 'forever' | 'once' | 'repeating';
+    durationMonths?: number;
+  }) {
+    const stripe = this.getStripeOrThrow();
+
+    const code = String(input.code ?? '').trim();
+    if (!code) throw new BadRequestException('Cod reducere lipsă.');
+
+    if (input.value == null || Number.isNaN(Number(input.value))) {
+      throw new BadRequestException('Valoare reducere invalidă.');
+    }
+
+    const value = Number(input.value);
+
+    const couponParams: any = {
+      duration: input.duration,
+      name: `Auto-coupon ${code}`,
+    };
+
+    if (input.duration === 'repeating') {
+      couponParams.duration_in_months =
+        input.durationMonths != null ? input.durationMonths : 12;
+    }
+
+    if (input.discountType === 'percent') {
+      couponParams.percent_off = value;
+    } else {
+      couponParams.amount_off = Math.round(value * 100);
+      couponParams.currency = 'ron';
+    }
+
+    const coupon = await stripe.coupons.create(couponParams);
+
+    const promo = await stripe.promotionCodes.create({
+      coupon: coupon.id,
+      code,
+      active: true,
+    });
+
+    return {
+      promotionCodeId: promo.id,
+      promotionCode: promo,
+      coupon,
+    };
+  }
+
+  async stripeDeactivatePromotionCode(promotionCodeId: string) {
+    const stripe = this.getStripeOrThrow();
+    const promo = await stripe.promotionCodes.update(promotionCodeId, {
+      active: false,
+    });
+    return promo;
+  }
+
+
   // ─── Stripe helpers ───────────────────────────────────────────────────────
 
   /**
@@ -345,6 +515,7 @@ export class PaymentsService {
   private extractInvoicePaymentIntent(latestInvoice: unknown): {
     paymentIntentId: string;
     clientSecret: string;
+    amountTotal: number;
   } {
     const invoice = latestInvoice as Stripe.Invoice | string | null;
     if (!invoice || typeof invoice === 'string') {
@@ -363,7 +534,14 @@ export class PaymentsService {
     if (!pi.client_secret) {
       throw new BadRequestException('PaymentIntent fără client_secret.');
     }
-    return { paymentIntentId: pi.id, clientSecret: pi.client_secret };
+    const amountTotal =
+      pi.amount != null ? round2(pi.amount / 100) : 0;
+
+    return {
+      paymentIntentId: pi.id,
+      clientSecret: pi.client_secret,
+      amountTotal,
+    };
   }
 
   private invoicePaymentIntentId(invoice: Stripe.Invoice): string | null {
@@ -409,7 +587,10 @@ export class PaymentsService {
     const newExpiresAt = new Date(base);
     newExpiresAt.setFullYear(newExpiresAt.getFullYear() + 1);
 
-    const { noVat, total } = this.computeAmount();
+    const vatRate = this.config.get('pricing.vatRate') ?? 0.21;
+    const rawTotal = invoice.amount_paid ?? (invoice.total ?? 0);
+    const amountTotal = round2(Number(rawTotal) / 100);
+    const amountNoVat = round2(amountTotal / (1 + vatRate));
 
     await this.contracts
       .extendLatestExpiry(String(client._id), newExpiresAt)
@@ -426,8 +607,8 @@ export class PaymentsService {
       type: PaymentRecordType.CARD,
       kind: PaymentKind.EXTENSION,
       periodYears: 1,
-      amountNoVat: noVat,
-      amountTotal: total,
+      amountNoVat: amountNoVat,
+      amountTotal: amountTotal,
       previousExpiresAt,
       newExpiresAt,
       note: `Reînnoire abonament Stripe ${invoice.id}`,
@@ -442,8 +623,8 @@ export class PaymentsService {
         email: client.email,
         kind: InvoiceKind.EXTENSION,
         periodYears: 1,
-        amountNoVat: noVat,
-        amountTotal: total,
+        amountNoVat: amountNoVat,
+        amountTotal: amountTotal,
         phone: client.phone,
         address: client.address,
         city: client.city,

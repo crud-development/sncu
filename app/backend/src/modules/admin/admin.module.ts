@@ -15,6 +15,7 @@ import {
   AdminInvoicesController,
   AdminOrdersController,
   AdminSettingsController,
+  AdminStripeController,
 } from './admin.controller';
 
 @Module({
@@ -34,6 +35,7 @@ import {
     AdminContractsController,
     AdminInvoicesController,
     AdminSettingsController,
+    AdminStripeController,
   ],
   providers: [AdminService, SeedService],
 })

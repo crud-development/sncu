@@ -332,3 +332,96 @@ export const downloadAdminContractPdf = (id: string) =>
   downloadPdf(`/api/admin/contracts/${id}/pdf`, `contract-${id}.pdf`);
 export const downloadAdminOrderPdf = (id: string) =>
   downloadPdf(`/api/admin/orders/${id}/pdf`, `comanda-${id}.pdf`);
+
+
+/* ─────────── ADMIN STRIPE ─────────── */
+
+export interface AdminStripeStatus {
+  configured: boolean;
+  mock: boolean;
+}
+
+export interface AdminStripeCustomer {
+  id: string;
+  stripeCustomerId: string;
+  email: string | null;
+  name: string | null;
+  metadata: Record<string, any>;
+  createdAt: number;
+}
+
+export interface AdminStripeSubscription {
+  id: string;
+  customer: string | undefined;
+  status: string;
+  currentPeriodEnd: number;
+  cancelAtPeriodEnd: boolean;
+  createdAt: number;
+}
+
+export interface AdminStripeInvoice {
+  id: string;
+  number: string | null;
+  status: string;
+  customer: string | undefined;
+  amountDue: number;
+  amountPaid: number;
+  billingReason: string | null;
+  createdAt: number;
+  hostedInvoiceUrl: string | null;
+}
+
+export interface AdminStripePromotionCode {
+  id: string;
+  code: string | null;
+  active: boolean;
+  coupon: any;
+  createdAt: number;
+}
+
+export const adminStripeStatus = () =>
+  api.get<AdminStripeStatus>('/admin/stripe/status').then((r) => r.data);
+
+export const adminStripeListCustomers = (limit = 50) =>
+  api
+    .get<AdminStripeCustomer[]>('/admin/stripe/customers', {
+      params: { limit },
+    })
+    .then((r) => r.data);
+
+export const adminStripeListSubscriptions = (limit = 50) =>
+  api
+    .get<AdminStripeSubscription[]>('/admin/stripe/subscriptions', {
+      params: { limit },
+    })
+    .then((r) => r.data);
+
+export const adminStripeListInvoices = (limit = 50) =>
+  api
+    .get<AdminStripeInvoice[]>('/admin/stripe/invoices', {
+      params: { limit },
+    })
+    .then((r) => r.data);
+
+export const adminStripeListPromotionCodes = () =>
+  api
+    .get<AdminStripePromotionCode[]>('/admin/stripe/promotion-codes')
+    .then((r) => r.data);
+
+export type CreatePromotionCodeDto = {
+  code: string;
+  discountType: 'percent' | 'amount';
+  value: number;
+  duration: 'forever' | 'once' | 'repeating';
+  durationMonths?: number;
+};
+
+export const adminStripeCreatePromotionCode = (data: CreatePromotionCodeDto) =>
+  api
+    .post('/admin/stripe/promotion-codes', data)
+    .then((r) => r.data);
+
+export const adminStripeDeactivatePromotionCode = (id: string) =>
+  api
+    .post(`/admin/stripe/promotion-codes/${id}/deactivate`)
+    .then((r) => r.data);

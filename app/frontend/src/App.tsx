@@ -15,6 +15,7 @@ import { AdminClienti } from './pages/admin/AdminClienti';
 import { AdminComenzi } from './pages/admin/AdminComenzi';
 import { AdminContracte } from './pages/admin/AdminContracte';
 import { AdminFacturi } from './pages/admin/AdminFacturi';
+import { AdminStripe } from './pages/admin/AdminStripe';
 import { AdminSetari } from './pages/admin/AdminSetari';
 
 export function App() {
@@ -50,6 +51,7 @@ export function App() {
         <Route path="/admin/comenzi" element={<AdminComenzi />} />
         <Route path="/admin/contracte" element={<AdminContracte />} />
         <Route path="/admin/facturi" element={<AdminFacturi />} />
+        <Route path="/admin/stripe" element={<AdminStripe />} />
         <Route path="/admin/setari" element={<AdminSetari />} />
       </Route>
 

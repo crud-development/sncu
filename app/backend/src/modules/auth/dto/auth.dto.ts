@@ -25,6 +25,9 @@ export class RegisterDto {
 
   @IsOptional() @IsInt() @Min(1)
   workpoints?: number;
+
+  @IsOptional() @IsString()
+  promotionCode?: string;
 }
 
 export class ActivateDto {

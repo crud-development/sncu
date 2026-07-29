@@ -27,6 +27,7 @@ interface Form {
   judet: string;
   tipActivitate: string;
   ansvsaAuthorization?: string;
+  promotionCode?: string;
   acceptTerms: boolean;
 }
 
@@ -204,6 +205,11 @@ export function Inregistrare() {
             )}
           </div>
 
+
+          <div className="field" style={{ marginTop: 12 }}>
+            <label>Cod reducere (opțional)</label>
+            <input className="input" {...register('promotionCode')} placeholder="ex: BIO-10" />
+          </div>
           <div className="field" style={{ marginTop: 4 }}>
             <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer', fontWeight: 500 }}>
               <input
