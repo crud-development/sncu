@@ -150,15 +150,56 @@ export class PaymentsService {
       });
       subscriptionId = subscription.id;
 
-      const {
-        paymentIntentId: piId,
-        clientSecret: secret,
-        amountTotal: piAmount,
-      } = this.extractInvoicePaymentIntent(subscription.latest_invoice);
+      const extracted = this.extractInvoicePaymentIntent(
+        subscription.latest_invoice,
+      );
 
-      paymentIntentId = piId;
-      clientSecret = secret;
-      amountTotal = piAmount;
+      if (extracted.free) {
+        // 100% reducere: invoice 0 lei — finalizăm & creăm contul fără card.
+        const invoiceId = extracted.invoiceId;
+        paymentIntentId =
+          extracted.paymentIntentId ?? `free_${invoiceId}`;
+        clientSecret = '';
+        amountTotal = 0;
+        amountNoVat = 0;
+
+        if (
+          subscription.status === 'incomplete' &&
+          invoiceId &&
+          this.stripe
+        ) {
+          await this.stripe.invoices.pay(invoiceId).catch((err) => {
+            this.logger.warn(
+              `Nu s-a putut marca invoice ${invoiceId} ca plătit (0 lei): ${err}`,
+            );
+          });
+        }
+
+        await this.pending.create({
+          paymentIntentId,
+          subscriptionId,
+          customerId,
+          data: dto as unknown as Record<string, unknown>,
+          amountNoVat,
+          amountTotal,
+        });
+
+        await this.provision(paymentIntentId);
+
+        return {
+          clientSecret: '',
+          paymentIntentId,
+          publishableKey:
+            this.config.get<string>('stripe.publishableKey') ?? '',
+          mock: this.isMock,
+          amount: 0,
+          free: true,
+        };
+      }
+
+      paymentIntentId = extracted.paymentIntentId!;
+      clientSecret = extracted.clientSecret!;
+      amountTotal = extracted.amountTotal;
       amountNoVat = round2(amountTotal / (1 + vatRate));
     } else {
       paymentIntentId = 'pi_mock_' + randomBytes(8).toString('hex');
@@ -183,6 +224,7 @@ export class PaymentsService {
         this.config.get<string>('stripe.publishableKey') ?? '',
       mock: this.isMock,
       amount: amountTotal,
+      free: false,
     };
   }
 
@@ -262,7 +304,12 @@ export class PaymentsService {
       const reason = invoice.billing_reason;
       if (reason === 'subscription_create') {
         const piId = this.invoicePaymentIntentId(invoice);
-        if (piId) await this.provision(piId);
+        if (piId) {
+          await this.provision(piId);
+        } else if (invoice.id) {
+          // 100% reducere: fără PaymentIntent.
+          await this.provision(`free_${invoice.id}`);
+        }
       } else if (reason === 'subscription_cycle') {
         await this.handleSubscriptionRenewal(invoice);
       }
@@ -513,9 +560,11 @@ export class PaymentsService {
   }
 
   private extractInvoicePaymentIntent(latestInvoice: unknown): {
-    paymentIntentId: string;
-    clientSecret: string;
+    paymentIntentId: string | null;
+    clientSecret: string | null;
     amountTotal: number;
+    invoiceId: string;
+    free: boolean;
   } {
     const invoice = latestInvoice as Stripe.Invoice | string | null;
     if (!invoice || typeof invoice === 'string') {
@@ -523,25 +572,63 @@ export class PaymentsService {
         'Abonamentul Stripe nu a returnat invoice-ul inițial.',
       );
     }
+
+    const invoiceId = invoice.id;
+    if (!invoiceId) {
+      throw new BadRequestException('Invoice Stripe fără id.');
+    }
+
+    const amountDue = invoice.amount_due ?? 0;
+    const amountPaid = invoice.amount_paid ?? 0;
+    const invoiceTotal = invoice.total ?? 0;
+    const isZero =
+      amountDue === 0 ||
+      invoice.status === 'paid' ||
+      invoiceTotal === 0 ||
+      (amountPaid === 0 && amountDue === 0 && invoiceTotal === 0);
+
     const pi = (invoice as Stripe.Invoice & {
       payment_intent?: string | Stripe.PaymentIntent | null;
     }).payment_intent;
-    if (!pi || typeof pi === 'string') {
-      throw new BadRequestException(
-        'Abonamentul Stripe nu a returnat PaymentIntent pentru plata inițială.',
-      );
-    }
-    if (!pi.client_secret) {
-      throw new BadRequestException('PaymentIntent fără client_secret.');
-    }
-    const amountTotal =
-      pi.amount != null ? round2(pi.amount / 100) : 0;
 
-    return {
-      paymentIntentId: pi.id,
-      clientSecret: pi.client_secret,
-      amountTotal,
-    };
+    if (pi && typeof pi !== 'string') {
+      const amountTotal =
+        pi.amount != null ? round2(pi.amount / 100) : 0;
+      if (amountTotal === 0 || isZero) {
+        return {
+          paymentIntentId: pi.id,
+          clientSecret: pi.client_secret,
+          amountTotal: 0,
+          invoiceId,
+          free: true,
+        };
+      }
+      if (!pi.client_secret) {
+        throw new BadRequestException('PaymentIntent fără client_secret.');
+      }
+      return {
+        paymentIntentId: pi.id,
+        clientSecret: pi.client_secret,
+        amountTotal,
+        invoiceId,
+        free: false,
+      };
+    }
+
+    // Cod 100%: Stripe nu creează PaymentIntent când suma e 0.
+    if (isZero) {
+      return {
+        paymentIntentId: null,
+        clientSecret: null,
+        amountTotal: 0,
+        invoiceId,
+        free: true,
+      };
+    }
+
+    throw new BadRequestException(
+      'Abonamentul Stripe nu a returnat PaymentIntent pentru plata inițială.',
+    );
   }
 
   private invoicePaymentIntentId(invoice: Stripe.Invoice): string | null {

@@ -80,6 +80,10 @@ export function Inregistrare() {
     try {
       const { acceptTerms: _, ...payload } = values;
       const res = await createPaymentIntent(payload);
+      if (res.free || res.amount === 0) {
+        setStep('done');
+        return;
+      }
       setIntent(res);
       setStep('pay');
     } catch (err) {
@@ -91,7 +95,7 @@ export function Inregistrare() {
     return (
       <Shell>
         <div className="card">
-          <h1 className="auth__title">Plată confirmată!</h1>
+          <h1 className="auth__title">Înregistrare confirmată!</h1>
           <p className="auth__sub">
             Verifică emailul pentru factură și pentru linkul de activare a contului.
           </p>

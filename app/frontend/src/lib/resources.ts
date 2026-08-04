@@ -176,6 +176,8 @@ export interface CreateIntentResult {
   publishableKey: string;
   mock: boolean;
   amount: number;
+  /** true când reducerea e 100% — cont creat fără plată card. */
+  free?: boolean;
 }
 
 export const getPaymentConfig = () =>
@@ -200,7 +202,10 @@ export interface AdminClient {
   accountStatus: string;
   paymentType: string;
   createdAt: string;
-  contractExpiresAt?: string;
+  /** Expirarea contului / abonamentului. */
+  accountExpiresAt?: string | null;
+  /** Expirarea contractului (document). */
+  contractExpiresAt?: string | null;
 }
 
 export interface AdminContract {

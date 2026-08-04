@@ -37,22 +37,18 @@ function startOfDay(d: Date) {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
 }
 
-/** Status client pe baza expirării contractului: Activ / Expirat. */
+/** Status cont pe baza datei de expirare a contului: Activ / Expirat. */
 function clientLifecycleStatus(c: AdminClient): 'Activ' | 'Expirat' | null {
-  if (c.contractStatus === 'Expirat') return 'Expirat';
-  if (c.contractExpiresAt) {
-    return startOfDay(new Date(c.contractExpiresAt)) >= startOfDay(new Date())
-      ? 'Activ'
-      : 'Expirat';
-  }
-  if (c.contractStatus === 'Semnat') return 'Activ';
-  return null;
+  const expiresAt = c.accountExpiresAt;
+  if (!expiresAt) return null;
+  return startOfDay(new Date(expiresAt)) >= startOfDay(new Date())
+    ? 'Activ'
+    : 'Expirat';
 }
 
+/** Contract activ = document semnat (neexpirat / neanulat) — status efectiv Semnat. */
 function hasActiveContract(c: AdminClient): boolean {
-  if (c.contractStatus !== 'Semnat') return false;
-  if (!c.contractExpiresAt) return true;
-  return startOfDay(new Date(c.contractExpiresAt)) >= startOfDay(new Date());
+  return c.contractStatus === 'Semnat';
 }
 
 function fmt(d?: string) {
@@ -122,8 +118,8 @@ export function AdminClienti() {
       }
 
       if (expiresFrom || expiresTo) {
-        if (!c.contractExpiresAt) return false;
-        const exp = new Date(c.contractExpiresAt);
+        if (!c.accountExpiresAt) return false;
+        const exp = new Date(c.accountExpiresAt);
         if (expiresFrom && exp < new Date(expiresFrom)) return false;
         if (expiresTo && exp > new Date(expiresTo + 'T23:59:59')) return false;
       }
@@ -164,7 +160,7 @@ export function AdminClienti() {
             onClick={() => {
               exportExcel(
                 'clienti.xls',
-                ['Firmă', 'CUI', 'Contact', 'Email', 'Telefon', 'Contract activ', 'Status', 'Creat', 'Expirare', 'Plată'],
+                ['Firmă', 'CUI', 'Contact', 'Email', 'Telefon', 'Contract activ', 'Status', 'Creat', 'Expirare cont', 'Plată'],
                 filtered.map((c) => [
                   c.companyName,
                   c.cui,
@@ -174,7 +170,7 @@ export function AdminClienti() {
                   hasActiveContract(c) ? 'Da' : 'Nu',
                   clientLifecycleStatus(c) || '',
                   fmt(c.createdAt),
-                  fmt(c.contractExpiresAt),
+                  fmt(c.accountExpiresAt ?? undefined),
                   c.paymentType,
                 ]),
               );
@@ -219,7 +215,7 @@ export function AdminClienti() {
         <span className="muted" style={{ fontSize: 13 }}>Data creare:</span>
         <input type="date" className="input" style={{ width: 'auto' }} value={createdFrom} onChange={(e) => setCreatedFrom(e.target.value)} />
         <input type="date" className="input" style={{ width: 'auto' }} value={createdTo} onChange={(e) => setCreatedTo(e.target.value)} />
-        <span className="muted" style={{ fontSize: 13 }}>Expirare:</span>
+        <span className="muted" style={{ fontSize: 13 }}>Expirare cont:</span>
         <input type="date" className="input" style={{ width: 'auto' }} value={expiresFrom} onChange={(e) => setExpiresFrom(e.target.value)} />
         <input type="date" className="input" style={{ width: 'auto' }} value={expiresTo} onChange={(e) => setExpiresTo(e.target.value)} />
       </div>
@@ -236,7 +232,7 @@ export function AdminClienti() {
             <thead>
               <tr>
                 <th>Firmă</th><th>Contact</th><th>Email</th><th>Telefon</th>
-                <th>Contract activ</th><th>Status</th><th>Creat</th><th>Expirare</th><th>Plată</th><th></th>
+                <th>Contract activ</th><th>Status</th><th>Creat</th><th>Expirare cont</th><th>Plată</th><th></th>
               </tr>
             </thead>
             <tbody>
@@ -258,7 +254,7 @@ export function AdminClienti() {
                   </td>
                   <td>{statusBadge(clientLifecycleStatus(c))}</td>
                   <td>{c.createdAt ? new Date(c.createdAt).toLocaleDateString('ro-RO') : '—'}</td>
-                  <td>{c.contractExpiresAt ? new Date(c.contractExpiresAt).toLocaleDateString('ro-RO') : '—'}</td>
+                  <td>{c.accountExpiresAt ? new Date(c.accountExpiresAt).toLocaleDateString('ro-RO') : '—'}</td>
                   <td><span className="badge badge--gray">{c.paymentType}</span></td>
                   <td>
                     <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', alignItems: 'center' }}>
@@ -320,7 +316,7 @@ function ManageClientModal({
 
   const extend = useMutation({
     mutationFn: () => adminExtendContract(client.id, periodYears),
-    meta: { successMessage: 'Contract prelungit. Plata OP a fost înregistrată.' },
+    meta: { successMessage: 'Cont prelungit. Plata OP a fost înregistrată.' },
     onSuccess: onExtended,
     onError: (e) => setError(apiError(e)),
   });
@@ -331,8 +327,8 @@ function ManageClientModal({
   const amountNoVat = yearlyNoVat * periodYears;
   const amountTotal = yearlyTotal * periodYears;
 
-  const currentExpiry = client.contractExpiresAt
-    ? new Date(client.contractExpiresAt)
+  const currentExpiry = client.accountExpiresAt
+    ? new Date(client.accountExpiresAt)
     : null;
   const now = new Date();
   const base = currentExpiry && currentExpiry > now ? currentExpiry : now;
@@ -345,16 +341,16 @@ function ManageClientModal({
 
       <div style={{ display: 'grid', gap: 8, marginBottom: 18, fontSize: 13 }}>
         <span className="muted">
-          Expirare curentă:{' '}
+          Expirare cont curentă:{' '}
           <strong style={{ color: 'var(--ink)' }}>
             {currentExpiry ? currentExpiry.toLocaleDateString('ro-RO') : '—'}
           </strong>
         </span>
       </div>
 
-      <div className="form-section-title">Prelungește contract</div>
+      <div className="form-section-title">Prelungește contul</div>
       <p className="muted" style={{ fontSize: 13, marginBottom: 14 }}>
-        Selectează perioada de prelungire. Se înregistrează automat o plată OP în baza de date.
+        Selectează perioada de prelungire a contului. Se înregistrează automat o plată OP în baza de date.
       </p>
 
       <div className="field">
@@ -371,7 +367,7 @@ function ManageClientModal({
       </div>
 
       <div className="alert alert--success" style={{ marginBottom: 16 }}>
-        Noua expirare: <strong>{previewExpiry.toLocaleDateString('ro-RO')}</strong>
+        Noua expirare cont: <strong>{previewExpiry.toLocaleDateString('ro-RO')}</strong>
         {pricing && (
           <>
             <br />
@@ -492,8 +488,7 @@ function AddClientModal({ onClose }: { onClose: () => void }) {
         city: v.city,
         judet: v.judet,
         tipActivitate: v.tipActivitate,
-        contactFirstName: v.contactFirstName,
-        contactLastName: v.contactLastName,
+        contactPerson: v.contactPerson,
         email: v.email,
         phone: v.phone,
         contractExpiresAt: v.contractExpiresAt,
@@ -549,11 +544,10 @@ function AddClientModal({ onClose }: { onClose: () => void }) {
               {TIP_ACTIVITATE.map((t) => <option key={t} value={t}>{t}</option>)}
             </select>
           </div>
-          <div className="field"><label>Prenume contact *</label><input className="input" {...register('contactFirstName', { required: true })} /></div>
-          <div className="field"><label>Nume contact *</label><input className="input" {...register('contactLastName', { required: true })} /></div>
+          <div className="field field--full"><label>Persoană de contact *</label><input className="input" {...register('contactPerson', { required: true })} /></div>
           <div className="field"><label>Email *</label><input type="email" className="input" {...register('email', { required: true })} /></div>
           <div className="field"><label>Telefon *</label><input className="input" {...register('phone', { required: true })} /></div>
-          <div className="field"><label>Data expirare contract *</label><input type="date" className="input" {...register('contractExpiresAt', { required: true })} /></div>
+          <div className="field"><label>Data expirare cont *</label><input type="date" className="input" {...register('contractExpiresAt', { required: true })} /></div>
         </div>
         <p className="muted" style={{ fontSize: 13, margin: '4px 0 14px' }}>
           Plata este setată automat pe <strong>OP</strong>. Contul se creează inactiv și primește email de activare.

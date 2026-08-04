@@ -78,8 +78,7 @@ export class AuthService {
     city: string;
     judet: string;
     tipActivitate: string;
-    contactFirstName: string;
-    contactLastName: string;
+    contactPerson: string;
     email: string;
     phone: string;
     contractExpiresAt: string;
@@ -87,6 +86,7 @@ export class AuthService {
     if (await this.clients.findByEmail(data.email)) {
       throw new BadRequestException('Există deja un cont cu acest email');
     }
+    const [firstName, ...rest] = data.contactPerson.trim().split(/\s+/);
     const ttl = this.config.get<number>('activationTtlHours') ?? 24;
     const client = await this.clients.create({
       companyName: data.companyName,
@@ -96,8 +96,8 @@ export class AuthService {
       city: data.city,
       judet: data.judet,
       tipActivitate: data.tipActivitate,
-      contactFirstName: data.contactFirstName,
-      contactLastName: data.contactLastName,
+      contactFirstName: firstName,
+      contactLastName: rest.join(' '),
       email: data.email,
       phone: data.phone,
       paymentType: PaymentType.OP,

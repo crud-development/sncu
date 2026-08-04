@@ -26,8 +26,7 @@ export class AdminCreateClientDto {
   @IsString() city: string;
   @IsString() judet: string;
   @IsString() tipActivitate: string;
-  @IsString() contactFirstName: string;
-  @IsString() contactLastName: string;
+  @IsString() contactPerson: string;
   @IsEmail() email: string;
   @IsString() phone: string;
   @IsDateString() contractExpiresAt: string;

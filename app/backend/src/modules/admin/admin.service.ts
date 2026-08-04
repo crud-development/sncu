@@ -180,7 +180,10 @@ export class AdminService {
         accountStatus: cl.status,
         paymentType: cl.paymentType,
         createdAt: (cl as any).createdAt,
-        contractExpiresAt: cl.contractExpiresAt,
+        /** Expirarea contului / abonamentului (acces platformă). */
+        accountExpiresAt: cl.contractExpiresAt,
+        /** Expirarea contractului semnat (document). */
+        contractExpiresAt: contract?.expiresAt ?? null,
       };
     });
   }
